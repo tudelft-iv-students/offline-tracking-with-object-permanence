@@ -3,7 +3,6 @@ dataset: 'nuScenes'
 version: 'v1.0-trainval'
 agent_setting: 'single_agent'
 input_representation: 'graphs'
-device: 'cuda:0'
 
 train_set_args: &ds_args
   split: 'train'

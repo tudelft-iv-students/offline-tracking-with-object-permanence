@@ -8,7 +8,9 @@ from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
 
 # Import models
 from models.model import PredictionModel
+
 from models.encoders.raster_encoder import RasterEncoder
+
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
 from models.aggregators.concat import Concat

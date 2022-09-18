@@ -1,9 +1,14 @@
 from models.encoders.encoder import PredictionEncoder
 import torch
 import torch.nn as nn
+# raise NotImplementedError()
 from torchvision.models import resnet18, resnet34, resnet50
-# from positional_encodings import PositionalEncodingPermute2D
-from positional_encodings.torch_encodings import PositionalEncodingPermute2D
+# raise NotImplementedError()
+from positional_encodings import PositionalEncodingPermute2D
+# raise NotImplementedError()
+# import os
+# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+# from positional_encodings.torch_encodings import PositionalEncodingPermute2D
 from typing import Dict
 
 
