@@ -3,10 +3,7 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence
 from typing import Dict
-from return_device import get_freer_gpu
-
-# Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class PGPEncoder(PredictionEncoder):

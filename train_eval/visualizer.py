@@ -11,10 +11,7 @@ from nuscenes.prediction.input_representation.combinators import Rasterizer
 import train_eval.utils as u
 import imageio
 import os
-from return_device import get_freer_gpu
-
-# Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Visualizer:

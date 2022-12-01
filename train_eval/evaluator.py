@@ -9,10 +9,10 @@ import numpy as np
 from nuscenes.prediction.helper import convert_local_coords_to_global
 from nuscenes.eval.prediction.data_classes import Prediction
 import json
-from return_device import get_freer_gpu
+
 
 # Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Evaluator:
@@ -45,7 +45,7 @@ class Evaluator:
 #         print('after model sent to device=',get_freer_gpu())
 
         # Load checkpoint
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path,map_location='cuda:0')
         self.model.load_state_dict(checkpoint['model_state_dict'], strict=False)
 
         # Initialize metrics

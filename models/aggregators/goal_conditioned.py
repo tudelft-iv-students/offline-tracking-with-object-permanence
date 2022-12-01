@@ -5,10 +5,7 @@ from typing import Dict
 from torch.distributions import Categorical
 
 
-from return_device import get_freer_gpu
-
-# Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class GoalConditioned(GlobalAttention):

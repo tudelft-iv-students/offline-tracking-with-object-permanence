@@ -9,10 +9,7 @@ import math
 import os
 import train_eval.utils as u
 
-from return_device import get_freer_gpu
-
-# Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class Trainer:
@@ -257,7 +254,7 @@ class Trainer:
         """
         Loads checkpoint from given path
         """
-        checkpoint = torch.load(checkpoint_path)
+        checkpoint = torch.load(checkpoint_path,map_location='cuda:0')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         if not just_weights:
             self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

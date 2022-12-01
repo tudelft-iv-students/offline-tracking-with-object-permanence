@@ -3,11 +3,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union
 from models.decoders.utils import cluster_traj
-from return_device import get_freer_gpu
-
-# Initialize device:
-device = torch.device(get_freer_gpu() if torch.cuda.is_available() else "cpu")
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 class LVM(PredictionDecoder):
 
