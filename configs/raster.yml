@@ -8,8 +8,8 @@ train_set_args: &ds_args
   split: 'train'
   t_h: 2
   t_f: 6
-  map_extent: [ -50, 50, -20, 80 ]
-  img_size: [400,400]
+  map_extent: [-61, 61, -22, 100]
+  img_size: [488,488]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 15
@@ -35,21 +35,18 @@ num_workers: 4
 encoder_type: 'raster_encoder'
 encoder_args:
   backbone: 'resnet18'
-  input_channels: 3
+  input_channels: 6
   use_positional_encoding: True
-  target_agent_feat_size: 5
+  target_agent_feat_size: 3
   target_agent_enc_size: 32
-  node_enc_size: 32
-  nbr_feat_size: 5
-  nbr_emb_size: 16
-  nbr_enc_size: 32
-  num_gat_layers: 2
+  
 
 
 # Aggregator parameters
 aggregator_type: 'pgp'
 aggregator_args:
   pre_train: False
+  backbone: 'resnet18'
   target_agent_enc_size: 32
   node_enc_size: 32
   pi_h1_size: 32

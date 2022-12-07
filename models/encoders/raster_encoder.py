@@ -123,12 +123,12 @@ class RasterEncoder(PredictionEncoder):
         """
 
         # Unpack inputs:
-        target_agent_representation = inputs['target_agent_representation']
+        target_agent_representation = (inputs['target_agent_representation']).type(torch.float32)
         surrounding_agent_representation = inputs['surrounding_agent_representation']
-        map_representation = inputs['map_representation']
-
+        map_representation = inputs['map_representation'][0]
+        
         # Apply Conv layers
-        rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1)
+        rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1).type(torch.float32)
         context_encoding = self.backbone(rasterized_input)
 
         # Add positional encoding
@@ -136,10 +136,11 @@ class RasterEncoder(PredictionEncoder):
             context_encoding = context_encoding + self.pos_enc(context_encoding)
 
         # Reshape to form a set of features
-        context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)
-        context_encoding = context_encoding.permute(0, 2, 1)
+        # context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)
+        # context_encoding = context_encoding.permute(0, 2, 1)
 
         # Target agent encoding
+        
         target_agent_enc = self.relu(self.target_agent_encoder(target_agent_representation))
 
         # Return encodings
@@ -149,7 +150,7 @@ class RasterEncoder(PredictionEncoder):
                                           'map': None,
                                           'vehicles': None,
                                           'pedestrians': None,
-                                          'map_masks': None,
+                                          'map_masks': inputs['map_representation'][1].type(torch.int),
                                           'vehicle_masks': None,
                                           'pedestrian_masks': None
                                           },
