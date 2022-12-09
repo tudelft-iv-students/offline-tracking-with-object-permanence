@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from models.aggregators.aggregator import PredictionAggregator
-from models.library.cnnblocks import *
+from models.library.blocks import *
 from typing import Dict, Tuple
 
 

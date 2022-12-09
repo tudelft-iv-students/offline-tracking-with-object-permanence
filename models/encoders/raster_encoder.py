@@ -136,8 +136,8 @@ class RasterEncoder(PredictionEncoder):
             context_encoding = context_encoding + self.pos_enc(context_encoding)
 
         # Reshape to form a set of features
-        # context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)
-        # context_encoding = context_encoding.permute(0, 2, 1)
+        context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)## [Batch number, channel, H*W]
+        context_encoding = context_encoding.permute(0, 2, 1)
 
         # Target agent encoding
         
@@ -150,7 +150,7 @@ class RasterEncoder(PredictionEncoder):
                                           'map': None,
                                           'vehicles': None,
                                           'pedestrians': None,
-                                          'map_masks': inputs['map_representation'][1].type(torch.int),
+                                          'map_masks': inputs['map_representation'][1].type(torch.bool),
                                           'vehicle_masks': None,
                                           'pedestrian_masks': None
                                           },
