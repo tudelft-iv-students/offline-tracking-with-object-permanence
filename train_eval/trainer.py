@@ -9,7 +9,7 @@ import math
 import os
 import train_eval.utils as u
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:7" if torch.cuda.is_available() else "cpu")
 
 
 class Trainer:
