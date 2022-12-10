@@ -16,6 +16,7 @@ from models.encoders.pgp_encoder import PGPEncoder
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention
 from models.aggregators.goal_conditioned import GoalConditioned
+from models.aggregators.home_agg import HomeAggregator
 from models.aggregators.pgp import PGP
 from models.decoders.mtp import MTP
 from models.decoders.multipath import Multipath
@@ -98,7 +99,8 @@ def initialize_aggregator(aggregator_type: str, aggregator_args: Union[Dict, Non
         'concat': Concat,
         'global_attention': GlobalAttention,
         'gc': GoalConditioned,
-        'pgp': PGP
+        'pgp': PGP,
+        'home_agg': HomeAggregator,
     }
 
     if aggregator_args:
