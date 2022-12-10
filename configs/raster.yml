@@ -53,18 +53,18 @@ aggregator_args:
   num_heads: 1
   convolute: True
   conv_kernel_ratio: 0.15
+  out_channels: 64
 
 
 # Decoder parameters
-decoder_type: 'lvm'
+decoder_type: 'ram'
 decoder_args:
-  num_samples: 1000
-  op_len: 12
-  hidden_size: 128
-  encoding_size: 160
-  agg_type: 'sample_specific'
-  lv_dim: 5
-  num_clusters: 10
+  agg_type: 'home_agg'
+  conc_range: 18
+  resolution: 1
+  agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args'
+  decoder_depth: 4
+
 
 
 # Optimizer parameters

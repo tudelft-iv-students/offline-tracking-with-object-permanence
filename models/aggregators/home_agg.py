@@ -49,8 +49,9 @@ class HomeAggregator(PredictionAggregator):
             self.conv_kernel=int(args['conv_kernel_ratio']*self.sampler.H)
             if self.conv_kernel % 2 ==0:
                 self.conv_kernel+=1
-            self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=3*args['emb_size']//4, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
-                                CNNBlock(in_channels=3*args['emb_size']//4, out_channels=args['emb_size']//2, kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
+            interm_channel=int((args['out_channels']+args['emb_size'])/2)
+            self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
+                                CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
 
 
     def forward(self, encodings: Dict) -> torch.Tensor:
@@ -83,8 +84,8 @@ class HomeAggregator(PredictionAggregator):
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-
-        return op
+        outputs = {'agg_encoding': op}
+        return outputs
 
     @staticmethod
     def get_combined_encodings(context_enc: Dict) -> Tuple[torch.Tensor, torch.Tensor]:
