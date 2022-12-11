@@ -22,6 +22,8 @@ from models.decoders.mtp import MTP
 from models.decoders.multipath import Multipath
 from models.decoders.covernet import CoverNet
 from models.decoders.lvm import LVM
+from models.decoders.ram import RAM
+from models.decoders.heatmap import HTMAP
 
 # Import metrics
 from metrics.mtp_loss import MTPLoss
@@ -118,7 +120,9 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
         'mtp': MTP,
         'multipath': Multipath,
         'covernet': CoverNet,
-        'lvm': LVM
+        'lvm': LVM,
+        'ram':RAM,
+        'heatmap':HTMAP
     }
 
     return decoder_mapping[decoder_type](decoder_args)

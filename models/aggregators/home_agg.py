@@ -84,7 +84,7 @@ class HomeAggregator(PredictionAggregator):
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-        outputs = {'agg_encoding': op}
+        outputs = {'agg_encoding': op,'under_sampled_mask': mask_under}
         return outputs
 
     @staticmethod

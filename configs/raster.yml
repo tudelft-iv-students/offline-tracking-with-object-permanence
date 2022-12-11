@@ -57,13 +57,15 @@ aggregator_args:
 
 
 # Decoder parameters
-decoder_type: 'ram'
+decoder_type: 'heatmap'
 decoder_args:
   agg_type: 'home_agg'
   conc_range: 18
+  map_extent: [-61, 61, -22, 100]
   resolution: 1
   agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args'
-  decoder_depth: 4
+  decoder_depth: 3
+  heatmap_channel: 12
 
 
 
