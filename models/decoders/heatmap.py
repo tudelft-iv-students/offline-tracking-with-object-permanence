@@ -9,12 +9,13 @@ class HTMAP(PredictionDecoder):
 
     def __init__(self, args):
         """
-        Modified random walk model. Instead of using correlation to model edge weight, this method uses MLP to model the eedge weights.
+        Naive decoding network which uses 1*1 conv to compress the dimension and directly output
+        heatmaps for all time steps
 
         args to include:
-        agg_type: 'combined' or 'sample_specific'. Whether we have a single aggregated context vector or sample-specific
-        num_samples: int Number of trajectories to sample
-        op_len: int Length of predicted trajectories
+        agg_type: 'home_agg' just to make sure the aggregator is the one implemeneted by myself
+        resolution: float Grid size
+        agg_channel: int The number of channels of input tensor
         lv_dim: int Dimension of latent variable
         encoding_size: int Dimension of encoded scene + agent context
         hidden_size: int Size of output mlp hidden layer
@@ -25,7 +26,7 @@ class HTMAP(PredictionDecoder):
         self.agg_type = args['agg_type']
         assert (args['agg_type'] == 'home_agg')
         self.resolution=args['resolution']
-        self.local_conc_range = int(args['conc_range']/self.resolution)
+        # self.local_conc_range = int(args['conc_range']/self.resolution)
         self.agg_channel = args['agg_channel']
         self.layers=[]
         for i in range(args['decoder_depth']-1):
@@ -36,7 +37,7 @@ class HTMAP(PredictionDecoder):
         # self.layers.append(nn.LeakyReLU())
         self.decoding_net=nn.ModuleList(self.layers)
         self.softmax=nn.Softmax(dim=-1)
-        self.compensation=torch.Tensor([args['map_extent'][3],-args['map_extent'][0]])/self.resolution
+        
 
     def forward(self, inputs: Union[Dict, torch.Tensor]) -> Dict:
         """
@@ -56,16 +57,9 @@ class HTMAP(PredictionDecoder):
             else:
                 mask=None
 
-        if self.agg_type == 'combined':
-            agg_encoding = agg_encoding.unsqueeze(1).repeat(1, self.num_samples, 1)
-        else:
-            if len(agg_encoding.shape) != 3 or agg_encoding.shape[1] != self.num_samples:
-                raise Exception('Expected ' + str(self.num_samples) + 'encodings for each train/val data')
-
-        # Sample latent variable and concatenate with aggregated encoding
         x=agg_encoding
-        for layer in self.layers:
+        for i,layer in enumerate(self.decoding_net):
             x=layer(x)
         predictions=x.view(x.shape[0],x.shape[1],-1)
         predictions=self.softmax(predictions).view(x.shape)
-        return {'pred': predictions,'mask': mask,'resolution':self.resolution,'offset':self.compensation}
+        return {'pred': predictions,'mask': mask}

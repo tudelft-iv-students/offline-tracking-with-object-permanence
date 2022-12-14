@@ -58,6 +58,9 @@ class TrajectoryDataset(torch_data.Dataset):
         """
         inputs = self.get_inputs(idx)
         ground_truth = self.get_ground_truth(idx)
+        # print(ground_truth.shape)
+        # print(ground_truth)
+        # raise NotImplementedError()
         data = {'inputs': inputs, 'ground_truth': ground_truth}
         self.save_data(idx, data)
 

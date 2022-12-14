@@ -76,10 +76,14 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['min_ade_k', 'pi_bc']
-loss_weights: [1, 0.5]
+losses: ['focal_loss']
+loss_weights: [1]
 loss_args:
-  - k: 10
+  - gauss_blur: True
+    map_extent: [-61, 61, -22, 100]
+    resolution: 1
+    window_size: 7
+    horizon: 12
   - dummy: 0
 
 

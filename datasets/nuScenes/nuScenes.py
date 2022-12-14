@@ -6,6 +6,7 @@ from typing import Dict, Union
 import abc
 import os
 import pickle
+import torch
 
 
 class NuScenesTrajectories(SingleAgentDataset):
@@ -30,6 +31,15 @@ class NuScenesTrajectories(SingleAgentDataset):
         # Past and prediction horizons
         self.t_h = args['t_h']
         self.t_f = args['t_f']
+        if 'generate_heatmap' in args:
+            self.gen_heatmap=args['generate_heatmap']
+        else:
+            self.gen_heatmap=False
+        if self.gen_heatmap:
+            self.map_extent=args['map_extent']
+            self.img_size=args['img_size']
+            self.resolution = (self.map_extent[1] - self.map_extent[0]) / self. img_size[1]
+            self.compensation=torch.Tensor([args['map_extent'][3],-args['map_extent'][0]])/self.resolution
 
     def __len__(self):
         """
@@ -60,9 +70,25 @@ class NuScenesTrajectories(SingleAgentDataset):
         :param idx: data index
         :return ground_truth: Dictionary with grund truth labels
         """
-        target_agent_future = self.get_target_agent_future(idx)
-        ground_truth = {'traj': target_agent_future}
+        target_agent_future = self.get_target_agent_future(idx)#For current setting shape: [12,2]
+        if self.gen_heatmap:
+            heatmap=self.generate_gtmap(torch.Tensor(target_agent_future))
+            ground_truth = {'traj': target_agent_future,'heatmap':heatmap}
+        else:
+            ground_truth = {'traj': target_agent_future}
         return ground_truth
+    
+    def generate_gtmap(self, traj_gt: torch.Tensor) -> torch.Tensor:
+        swapped=torch.zeros_like(traj_gt)
+        swapped[:,0],swapped[:,1]=-traj_gt[:,1],traj_gt[:,0]
+        coord=torch.round(swapped/self.resolution+self.compensation).int()
+        coord=torch.clamp(coord,0,self.img_size[-1])
+        shape=[traj_gt.shape[0]]+self.img_size
+        gt_map=torch.zeros(shape)
+        for t in range(shape[0]):
+            x,y=coord[t]
+            gt_map[t,x,y]=1
+        return gt_map
 
     def save_data(self, idx: int, data: Dict):
         """

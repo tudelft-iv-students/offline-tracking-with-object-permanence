@@ -9,6 +9,7 @@ train_set_args:
   t_f: 6
   map_extent: [-61, 61, -22, 100]
   img_size: [488,488]
+  generate_heatmap: False
 
 val_set_args:
   split: 'train_val'
@@ -16,6 +17,7 @@ val_set_args:
   t_f: 6
   map_extent: [-61, 61, -22, 100]
   img_size: [488,488]
+  generate_heatmap: False
 
 test_set_args:
   split: 'val'
@@ -23,6 +25,7 @@ test_set_args:
   t_f: 6
   map_extent: [-61, 61, -22, 100]
   img_size: [488,488]
+  generate_heatmap: False
 
 batch_size: 32
 num_workers: 4

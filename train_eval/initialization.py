@@ -33,6 +33,7 @@ from metrics.miss_rate import MissRateK
 from metrics.covernet_loss import CoverNetLoss
 from metrics.pi_bc import PiBehaviorCloning
 from metrics.goal_pred_nll import GoalPredictionNLL
+from metrics.focal_loss import FocalLoss
 
 from typing import List, Dict, Union
 
@@ -141,7 +142,8 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'min_fde_k': MinFDEK,
         'miss_rate_k': MissRateK,
         'pi_bc': PiBehaviorCloning,
-        'goal_pred_nll': GoalPredictionNLL
+        'goal_pred_nll': GoalPredictionNLL,
+        'focal_loss':FocalLoss
     }
 
     if metric_args is not None:
