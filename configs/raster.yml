@@ -76,8 +76,8 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['focal_loss']
-loss_weights: [1]
+losses: ['focal_loss','drivable_loss']
+loss_weights: [1,0.25]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]

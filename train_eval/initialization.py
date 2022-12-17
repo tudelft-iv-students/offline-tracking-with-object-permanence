@@ -34,7 +34,7 @@ from metrics.covernet_loss import CoverNetLoss
 from metrics.pi_bc import PiBehaviorCloning
 from metrics.goal_pred_nll import GoalPredictionNLL
 from metrics.focal_loss import FocalLoss
-
+from metrics.drivable_area_loss import DrivablelLoss
 from typing import List, Dict, Union
 
 
@@ -143,7 +143,8 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'miss_rate_k': MissRateK,
         'pi_bc': PiBehaviorCloning,
         'goal_pred_nll': GoalPredictionNLL,
-        'focal_loss':FocalLoss
+        'focal_loss':FocalLoss,
+        'drivable_loss':DrivablelLoss
     }
 
     if metric_args is not None:

@@ -79,6 +79,7 @@ class HomeAggregator(PredictionAggregator):
         keys = self.key_emb(context_encoding).permute(1, 0, 2)
         vals = self.val_emb(context_encoding).permute(1, 0, 2)
         attn_output, attn_output_weights = self.mha(query, keys, vals, attn_mask=attn_mask)
+        attn_output[torch.isnan(attn_output)]=0
         op = attn_output.permute(1,0,2)
         op = op.view(op.shape[0],self.sampler.H,self.sampler.W,-1)
         # op = torch.cat((target_agent_enc, op), dim=-1)
