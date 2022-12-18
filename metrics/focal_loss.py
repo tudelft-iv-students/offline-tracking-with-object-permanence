@@ -27,7 +27,7 @@ class FocalLoss(Metric):
         self.name = 'focal_loss'
         self.window_size=args['window_size']
         self.resolution=args['resolution']
-        self.compensation=torch.Tensor([args['map_extent'][3],-args['map_extent'][0]])/self.resolution
+        self.compensation=(torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]).to(device))/self.resolution
         self.gassian_blur=args['gauss_blur']
         self.horizon=args['horizon']
         self.window=create_window(self.window_size, self.horizon)
@@ -46,22 +46,22 @@ class FocalLoss(Metric):
         
         traj_gt = ground_truth['traj'] if type(ground_truth) == dict else ground_truth
         true_heatmap,gs_map = self.generate_gtmap(traj_gt,pred.shape)
-        gs_map=gs_map*mask_da 
+        gs_map=gs_map*mask_da
         mask = (true_heatmap == 1).float()
-        pred_heatmap = torch.clamp(pred, min=1e-4, max=1-1e-4)
+        pred_heatmap = torch.clamp(pred, min=1e-4)
 
-        return -torch.mean(
+        return -torch.sum(
                 torch.pow(pred_heatmap - gs_map, 2) * (
-                mask * torch.log(gs_map)
+                mask * torch.log(pred_heatmap)
                 +
-                (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - gs_map))
+                (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
             )
         )
 
 
 
     def generate_gtmap(self, traj_gt: torch.Tensor,shape) -> torch.Tensor:
-        swapped=torch.zeros_like(traj_gt)
+        swapped=torch.zeros_like(traj_gt).to(device)
         swapped[:,:,0],swapped[:,:,1]=-traj_gt[:,:,1],traj_gt[:,:,0]
         coord=torch.round(swapped/self.resolution+self.compensation).int()
         coord=torch.clamp(coord,0,shape[-1])

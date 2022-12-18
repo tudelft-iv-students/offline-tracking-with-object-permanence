@@ -1,5 +1,5 @@
 from metrics.metric import Metric
-from typing import Dict
+from typing import Dict, Union
 import torch
 
 
@@ -16,7 +16,7 @@ class DrivablelLoss(Metric):
         self.name = 'drivable_loss'
         
 
-    def compute(self, predictions: Dict) -> torch.Tensor:
+    def compute(self, predictions: Dict,  ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
         Compute drivable loss
         :param predictions: Dictionary with 'pred': predicted heatmap with drivable mask 
@@ -26,11 +26,7 @@ class DrivablelLoss(Metric):
         # Unpack arguments
         pred = predictions['pred']
         mask = predictions['mask'].view(-1,pred.shape[-2],pred.shape[-1]).unsqueeze(1)
-        
-        non_drivable_area_mask=~mask
 
-        return  torch.sum(
-                non_drivable_area_mask*pred
-        )
+        return  torch.sum((~mask)*pred)
 
 

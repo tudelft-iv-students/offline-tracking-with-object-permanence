@@ -8,6 +8,8 @@ import time
 import math
 import os
 import train_eval.utils as u
+from torchvision.utils import make_grid
+
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -66,7 +68,9 @@ class Trainer:
         self.min_val_metric = math.inf
 
         # Print metrics after these many minibatches to keep track of training
+        self.add_img=True
         self.log_period = len(self.tr_dl)//cfg['log_freq']
+        self.add_img_freq=1
 
         # Initialize tensorboard writer
         self.writer = writer
@@ -149,6 +153,17 @@ class Trainer:
 
             # Forward pass
             predictions = self.model(data['inputs'])
+            if self.add_img:
+                if (self.current_epoch+1)%self.add_img_freq==0 and i==1:
+                    pred=torch.sum(predictions['pred'],dim=1,keepdim=True)
+                    self.writer.add_image(
+                        "pred", make_grid(pred.cpu(), nrow=8, normalize=True)
+                    )
+                    _,gs_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['pred'].shape)
+                    gs_map=torch.sum(gs_map,dim=1,keepdim=True)
+                    self.writer.add_image(
+                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=8, normalize=True)
+                    )
 
             # Compute loss and backprop if training
             if mode == 'train':
