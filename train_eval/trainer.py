@@ -154,15 +154,15 @@ class Trainer:
             # Forward pass
             predictions = self.model(data['inputs'])
             if self.add_img:
-                if (self.current_epoch+1)%self.add_img_freq==0 and i==1:
+                if (self.current_epoch+1)%self.add_img_freq==0 and i==20:
                     pred=torch.sum(predictions['pred'],dim=1,keepdim=True)
                     self.writer.add_image(
-                        "pred", make_grid(pred.cpu(), nrow=8, normalize=True)
+                        "pred", make_grid(pred.cpu(), nrow=8,padding=0 ,normalize=True),self.tb_iters
                     )
                     _,gs_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['pred'].shape)
                     gs_map=torch.sum(gs_map,dim=1,keepdim=True)
                     self.writer.add_image(
-                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=8, normalize=True)
+                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=8, normalize=True),self.tb_iters
                     )
 
             # Compute loss and backprop if training

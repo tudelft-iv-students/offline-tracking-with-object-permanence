@@ -16,7 +16,8 @@ from models.encoders.pgp_encoder import PGPEncoder
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention
 from models.aggregators.goal_conditioned import GoalConditioned
-from models.aggregators.home_agg import HomeAggregator
+from models.aggregators.home_agg import Sample2DAggregator
+from models.aggregators.home_orig import HomeAggregator
 from models.aggregators.pgp import PGP
 from models.decoders.mtp import MTP
 from models.decoders.multipath import Multipath
@@ -24,6 +25,7 @@ from models.decoders.covernet import CoverNet
 from models.decoders.lvm import LVM
 from models.decoders.ram import RAM
 from models.decoders.heatmap import HTMAP
+from models.decoders.home_decoder import HomeDecoder
 
 # Import metrics
 from metrics.mtp_loss import MTPLoss
@@ -104,6 +106,7 @@ def initialize_aggregator(aggregator_type: str, aggregator_args: Union[Dict, Non
         'gc': GoalConditioned,
         'pgp': PGP,
         'home_agg': HomeAggregator,
+        '2D_sample':Sample2DAggregator
     }
 
     if aggregator_args:
@@ -123,7 +126,8 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
         'covernet': CoverNet,
         'lvm': LVM,
         'ram':RAM,
-        'heatmap':HTMAP
+        'heatmap':HTMAP,
+        'home':HomeDecoder
     }
 
     return decoder_mapping[decoder_type](decoder_args)

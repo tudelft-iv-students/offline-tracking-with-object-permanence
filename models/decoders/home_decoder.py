@@ -5,7 +5,7 @@ from typing import Dict, Union
 from models.decoders.utils import cluster_traj
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-class HTMAP(PredictionDecoder):
+class HomeDecoder(PredictionDecoder):
 
     def __init__(self, args):
         """
@@ -24,7 +24,7 @@ class HTMAP(PredictionDecoder):
         """
         super().__init__()
         self.agg_type = args['agg_type']
-        assert (args['agg_type'] == '2D_sample')
+        assert (args['agg_type'] == 'home_agg')
         self.resolution=args['resolution']
         # self.local_conc_range = int(args['conc_range']/self.resolution)
         self.agg_channel = args['agg_channel']
@@ -36,7 +36,8 @@ class HTMAP(PredictionDecoder):
         self.layers.append(nn.Conv2d(self.agg_channel//(2**(args['decoder_depth']-1)), args['heatmap_channel'], kernel_size=1, stride=1, bias=False))
         # self.layers.append(nn.LeakyReLU())
         self.decoding_net=nn.ModuleList(self.layers)
-        self.softmax=nn.Softmax(dim=-1)
+        self.sigmoid=nn.Sigmoid()
+
         
 
     def forward(self, inputs: Union[Dict, torch.Tensor]) -> Dict:
@@ -53,13 +54,12 @@ class HTMAP(PredictionDecoder):
         else:
             agg_encoding = inputs['agg_encoding']
             if 'under_sampled_mask' in inputs:
-                mask=inputs['under_sampled_mask']
+                mask=inputs['under_sampled_mask'].to(device)
             else:
                 mask=None
 
         x=agg_encoding
         for i,layer in enumerate(self.decoding_net):
             x=layer(x)
-        predictions=x.view(x.shape[0],x.shape[1],-1)
-        predictions=self.softmax(predictions).view(x.shape)
+        predictions=self.sigmoid(x)
         return {'pred': predictions,'mask': mask}

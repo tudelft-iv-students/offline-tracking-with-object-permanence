@@ -147,7 +147,7 @@ class RasterEncoder(PredictionEncoder):
         encodings = {'target_agent_encoding': target_agent_enc,
                      'context_encoding': {'combined': context_encoding,
                                           'combined_masks': None,
-                                          'map': None,
+                                          'map': rasterized_input,
                                           'vehicles': None,
                                           'pedestrians': None,
                                           'map_masks': inputs['map_representation'][1].type(torch.bool),

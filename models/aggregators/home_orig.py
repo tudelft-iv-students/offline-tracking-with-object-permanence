@@ -4,10 +4,10 @@ from models.aggregators.aggregator import PredictionAggregator
 from models.library.blocks import *
 from models.library.RasterSampler import *
 from typing import Dict, Tuple
-from models.library.blocks import CNNBlock
+from models.library.blocks import CNNBlock,TransposeCNNBlock
 
 
-class Sample2DAggregator(PredictionAggregator):
+class HomeAggregator(PredictionAggregator):
     """
     Aggregate context encoding home decoder, composed of multiple transposed convolution blocks.
     """
@@ -38,21 +38,27 @@ class Sample2DAggregator(PredictionAggregator):
             nn.BatchNorm2d(args['context_enc_size']),
             nn.ReLU()
         )
-        self.query_emb = nn.Linear(2, args['emb_size'])
-        self.key_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
-        self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
-        self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
+        # self.query_emb = nn.Linear(2, args['emb_size'])
+        # self.key_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
+        # self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
+        # self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
         self.sampler = Sampler(args,resolution=args['resolution'])
-        self.num_heads = args['num_heads']
-        self.conv = args['convolute']
-        if self.conv:
-            self.conv_kernel=int(args['conv_kernel_ratio']*self.sampler.H)
-            if self.conv_kernel % 2 ==0:
-                self.conv_kernel+=1
-            interm_channel=int((args['out_channels']+args['emb_size'])/2)
-            self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
-                                CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
-        self.apply_mask=False
+        # self.num_heads = args['num_heads']
+        # self.conv = args['convolute']
+        # if self.conv:
+        #     self.conv_kernel=int(args['conv_kernel_ratio']*self.sampler.H)
+        #     if self.conv_kernel % 2 ==0:
+        #         self.conv_kernel+=1
+        #     interm_channel=int((args['out_channels']+args['emb_size'])/2)
+        #     self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
+        #                         CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
+        self.transpose_conv=nn.Sequential(
+            TransposeCNNBlock(in_channels=args['context_enc_size'], out_channels=256, kernel_size=3, stride=2, padding=1, output_padding=0),
+            TransposeCNNBlock(in_channels=256, out_channels=128, kernel_size=3, stride=2, padding=1, output_padding=0),
+            TransposeCNNBlock(in_channels=128, out_channels=64, kernel_size=3, stride=2, padding=1, output_padding=0),
+            TransposeCNNBlock(in_channels=64, out_channels=32, kernel_size=3, stride=2, output_padding=1),
+            TransposeCNNBlock(in_channels=32, out_channels=26, kernel_size=3, stride=2, padding=1, output_padding=1)
+        )
 
     def forward(self, encodings: Dict) -> torch.Tensor:
         """
@@ -63,34 +69,21 @@ class Sample2DAggregator(PredictionAggregator):
         context_enc = encodings['context_encoding']
         if context_enc['combined'] is not None:
             combined_enc, map_mask = context_enc['combined'], context_enc['map_masks'].bool()
+            if context_enc['map'] is not None:
+                raster_map=context_enc['map']
+                self.concat=True
         else:
             combined_enc, _ = self.get_combined_encodings(context_enc)
+            self.concat=False
 
         augmented_target_agent_enc = target_agent_enc.unsqueeze(2).unsqueeze(3).repeat(1,1,combined_enc.shape[-2],combined_enc.shape[-1])
         concatenated_encodings=torch.cat([combined_enc,augmented_target_agent_enc],dim=1)
         context_encoding = self.dim_reduction_block(concatenated_encodings)##Fuse agent feat with map feat by compressing the dimension (actually is linear layer)
-        context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)## [Batch number, channel, H*W]
-        context_encoding = context_encoding.permute(0, 2, 1)## [Batch number, H*W, channel]
+        augmented_encoding = self.transpose_conv(context_encoding)
+        if self.concat:
+            op = torch.cat([augmented_encoding, raster_map], dim=1)
 
-        nodes_2D=self.sampler.sample_goals().repeat(context_encoding.shape[0],1,1).type(torch.float32)
-        
-        query = self.query_emb(nodes_2D).permute(1,0,2)
-        keys = self.key_emb(context_encoding).permute(1, 0, 2)
-        vals = self.val_emb(context_encoding).permute(1, 0, 2)
-        mask_under=(self.sampler.sample_mask(map_mask))
-        if self.apply_mask:
-            
-            attn_mask=~mask_under.unsqueeze(-1).repeat(self.num_heads,1,context_encoding.shape[1])
-            attn_output, attn_output_weights = self.mha(query, keys, vals, attn_mask=attn_mask)
-        else:
-            attn_output, attn_output_weights = self.mha(query, keys, vals)
-        attn_output[torch.isnan(attn_output)]=0
-        op = attn_output.permute(1,0,2)
-        op = op.view(op.shape[0],self.sampler.H,self.sampler.W,-1)
-        # op = torch.cat((target_agent_enc, op), dim=-1)
-        if self.conv:
-            op=self.final_convs(op.permute(0,3,1,2))
-        outputs = {'agg_encoding': op,'under_sampled_mask': mask_under}
+        outputs = {'agg_encoding': op,'under_sampled_mask': map_mask}
         return outputs
 
     @staticmethod
