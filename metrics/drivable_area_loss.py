@@ -14,6 +14,7 @@ class DrivablelLoss(Metric):
         Initialize focal loss
         """
         self.name = 'drivable_loss'
+        self.type = args['type']
         
 
     def compute(self, predictions: Dict,  ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
@@ -26,7 +27,9 @@ class DrivablelLoss(Metric):
         # Unpack arguments
         pred = predictions['pred']
         mask = predictions['mask'].view(-1,pred.shape[-2],pred.shape[-1]).unsqueeze(1)
-
-        return  torch.sum((~mask)*pred)
+        if self.type=='mean':
+            return  torch.sum((~mask)*pred)/torch.sum((~mask))
+        else:
+            return  torch.sum((~mask)*pred)
 
 

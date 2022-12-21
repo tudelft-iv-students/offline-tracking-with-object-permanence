@@ -40,22 +40,7 @@ encoder_args:
 
 
 # Aggregator parameters
-aggregator_type: '2D_sample'
-aggregator_args:
-  pre_train: False
-  backbone: 'resnet18'
-  target_agent_enc_size: 32
-  map_extent: [-61, 61, -22, 100]
-  context_enc_size: 512
-  img_size: [488,488]
-  resolution: 1
-  emb_size: 128
-  num_heads: 1
-  convolute: True
-  conv_kernel_ratio: 0.15
-  out_channels: 64
-
-# aggregator_type: 'home_agg'
+# aggregator_type: '2D_sample'
 # aggregator_args:
 #   pre_train: False
 #   backbone: 'resnet18'
@@ -68,49 +53,64 @@ aggregator_args:
 #   num_heads: 1
 #   convolute: True
 #   conv_kernel_ratio: 0.15
-#   out_channels: 32
+#   out_channels: 64
+
+aggregator_type: 'home_agg'
+aggregator_args:
+  pre_train: False
+  backbone: 'resnet18'
+  target_agent_enc_size: 32
+  map_extent: [-61, 61, -22, 100]
+  context_enc_size: 512
+  img_size: [488,488]
+  resolution: 1
+  emb_size: 128
+  num_heads: 1
+  convolute: True
+  conv_kernel_ratio: 0.15
+  out_channels: 32
 
 
 # Decoder parameters
-decoder_type: 'heatmap'
-decoder_args:
-  agg_type: '2D_sample'
-  conc_range: 18
-  map_extent: [-61, 61, -22, 100]
-  resolution: 1
-  agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
-  decoder_depth: 3
-  heatmap_channel: 12
-
-# decoder_type: 'home'
+# decoder_type: 'heatmap'
 # decoder_args:
-#   agg_type: 'home_agg'
+#   agg_type: '2D_sample'
 #   conc_range: 18
 #   map_extent: [-61, 61, -22, 100]
 #   resolution: 1
-#   agg_channel: 32 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
-#   decoder_depth: 2
+#   agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
+#   decoder_depth: 3
 #   heatmap_channel: 12
+
+decoder_type: 'home'
+decoder_args:
+  agg_type: 'home_agg'
+  conc_range: 18
+  map_extent: [-61, 61, -22, 100]
+  resolution: 1
+  agg_channel: 32 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
+  decoder_depth: 2
+  heatmap_channel: 12
 
 
 
 # Optimizer parameters
 optim_args:
-  lr: 0.002
+  lr: 0.001
   scheduler_step: 10
   scheduler_gamma: 0.5
 
 
 losses: ['focal_loss','drivable_loss']
-loss_weights: [1,0.01]
+loss_weights: [0.5,1]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
     resolution: 1
     window_size: 7
     horizon: 12
-    type: 'sum'
-  - type: 'sum'
+    type: 'mean'
+  - type: 'mean'
 
 
 tr_metrics: ['focal_loss','drivable_loss']
@@ -120,8 +120,8 @@ tr_metric_args:
     resolution: 1
     window_size: 7
     horizon: 12
-    type: 'sum'
-  - type: 'sum'
+    type: 'mean'
+  - type: 'mean'
 
 val_metrics: ['focal_loss','drivable_loss']
 val_metric_args:
@@ -130,8 +130,8 @@ val_metric_args:
     resolution: 1
     window_size: 7
     horizon: 12
-    type: 'sum'
-  - type: 'sum'
+    type: 'mean'
+  - type: 'mean'
 
 
 log_freq: 100

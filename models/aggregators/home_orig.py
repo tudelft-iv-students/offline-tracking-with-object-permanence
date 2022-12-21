@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from models.aggregators.aggregator import PredictionAggregator
 from models.library.blocks import *
-from models.library.RasterSampler import *
+# from models.library.RasterSampler import *
 from typing import Dict, Tuple
 from models.library.blocks import CNNBlock,TransposeCNNBlock
 
@@ -42,7 +42,7 @@ class HomeAggregator(PredictionAggregator):
         # self.key_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
         # self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
         # self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
-        self.sampler = Sampler(args,resolution=args['resolution'])
+        # self.sampler = Sampler(args,resolution=args['resolution'])
         # self.num_heads = args['num_heads']
         # self.conv = args['convolute']
         # if self.conv:

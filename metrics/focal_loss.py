@@ -31,6 +31,7 @@ class FocalLoss(Metric):
         self.gassian_blur=args['gauss_blur']
         self.horizon=args['horizon']
         self.window=create_window(self.window_size, self.horizon)
+        self.type=args['type']
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -49,14 +50,22 @@ class FocalLoss(Metric):
         gs_map=gs_map*mask_da
         mask = (true_heatmap == 1).float()
         pred_heatmap = torch.clamp(pred, min=1e-4)
-
-        return -torch.sum(
-                torch.pow(pred_heatmap - gs_map, 2) * (
-                mask * torch.log(pred_heatmap)
-                +
-                (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
+        if self.type=='mean':
+            return -torch.sum(
+                    torch.pow(pred_heatmap - gs_map, 2) * (
+                    mask * torch.log(pred_heatmap)
+                    +
+                    (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
+                )
+            )/(pred.shape[0]*pred.shape[1])
+        else:
+            return -torch.sum(
+                    torch.pow(pred_heatmap - gs_map, 2) * (
+                    mask * torch.log(pred_heatmap)
+                    +
+                    (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
+                )
             )
-        )
 
 
 
