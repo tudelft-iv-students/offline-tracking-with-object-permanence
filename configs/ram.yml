@@ -22,7 +22,7 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 32
+batch_size: 6
 num_workers: 8
 
 
@@ -40,7 +40,7 @@ encoder_args:
 
 
 # Aggregator parameters
-aggregator_type: '2D_sample'
+aggregator_type: 'ram'
 aggregator_args:
   pre_train: False
   backbone: 'resnet18'
@@ -50,7 +50,7 @@ aggregator_args:
   img_size: [488,488]
   resolution: 1
   emb_size: 128
-  num_heads: 1
+  num_heads: 2
   convolute: True
   conv_kernel_ratio: 0.15
   out_channels: 64
@@ -72,9 +72,9 @@ aggregator_args:
 
 
 # Decoder parameters
-decoder_type: 'heatmap'
+decoder_type: 'ram_decoder'
 decoder_args:
-  agg_type: '2D_sample'
+  agg_type: 'ram'
   conc_range: 18
   map_extent: [-61, 61, -22, 100]
   resolution: 1

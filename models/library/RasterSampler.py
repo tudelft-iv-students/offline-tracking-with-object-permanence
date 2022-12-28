@@ -66,8 +66,8 @@ class Sampler():
             for batch in range(B):
                 valid_x=x_coord[mask[batch]]
                 valid_y=y_coord[mask[batch]]
-                nodes=torch.cat((valid_x.unsqueeze(0),valid_y.unsqueeze(0)),dim=0).T
+                nodes=(torch.cat((valid_x.unsqueeze(0),valid_y.unsqueeze(0)),dim=0).T).to(device)
                 nodes_2D.append(nodes)
         else:
-            nodes_2D=torch.cat((x_coord.unsqueeze(0),y_coord.unsqueeze(0)),dim=0).view([2,-1]).T
-        return nodes_2D.to(device)
+            nodes_2D=(torch.cat((x_coord.unsqueeze(0),y_coord.unsqueeze(0)),dim=0).view([2,-1]).T).to(device)
+        return nodes_2D

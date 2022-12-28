@@ -9,7 +9,7 @@ from models.library.blocks import CNNBlock
 
 class RamAggregator(PredictionAggregator):
     """
-    Aggregate context encoding home decoder, composed of multiple transposed convolution blocks.
+    RAM aggregator, using attention weights as edge weights between nodes
     """
 
     def __init__(self, args: Dict):
@@ -38,10 +38,18 @@ class RamAggregator(PredictionAggregator):
             nn.BatchNorm2d(args['context_enc_size']),
             nn.ReLU()
         )
+        self.apply_mask=False
+        ### Target nodes - map attention
         self.query_emb = nn.Linear(2, args['emb_size'])
         self.key_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
         self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
         self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
+        ### Target nodes self-attention
+        self.query_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+        self.key_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+        self.val_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+        self.mha1 = nn.MultiheadAttention(args['out_channels'], args['num_heads'])
+
         self.sampler = Sampler(args,resolution=args['resolution'],apply_mask=True)
         self.num_heads = args['num_heads']
         self.conv = args['convolute']
@@ -52,7 +60,8 @@ class RamAggregator(PredictionAggregator):
             interm_channel=int((args['out_channels']+args['emb_size'])/2)
             self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
                                 CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
-        self.apply_mask_on_attn=False
+        self.resolution=args['resolution']
+        self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]).to(device))/self.resolution).int()
 
     def forward(self, encodings: Dict) -> torch.Tensor:
         """
@@ -72,28 +81,35 @@ class RamAggregator(PredictionAggregator):
         context_encoding = context_encoding.view(context_encoding.shape[0], context_encoding.shape[1], -1)## [Batch number, channel, H*W]
         context_encoding = context_encoding.permute(0, 2, 1)## [Batch number, H*W, channel]
 
-        nodes_2D=self.sampler.sample_goals(map_mask)
+        nodes_2D=self.sampler.sample_goals().repeat(context_encoding.shape[0],1,1).type(torch.float32)
+        
+        query = self.query_emb(nodes_2D).permute(1,0,2)
         keys = self.key_emb(context_encoding).permute(1, 0, 2)
         vals = self.val_emb(context_encoding).permute(1, 0, 2)
-        mask_under=(self.sampler.sample_mask(map_mask))
-        # for batch in nodes_2D:
-
-        query = self.query_emb(nodes_2D).permute(1,0,2)
-        
-        if self.apply_mask_on_attn:
+        mask_map=(self.sampler.sample_mask(map_mask))
+        if self.apply_mask:
             
-            attn_mask=~mask_under.unsqueeze(-1).repeat(self.num_heads,1,context_encoding.shape[1])
-            attn_output, attn_output_weights = self.mha(query, keys, vals, attn_mask=attn_mask)
+            attn_mask=~mask_map.unsqueeze(-1).repeat(self.num_heads,1,context_encoding.shape[1])
+            attn_output, _ = self.mha(query, keys, vals, attn_mask=attn_mask)
+            attn_output[torch.isnan(attn_output)]=0
         else:
-            attn_output, attn_output_weights = self.mha(query, keys, vals)
-        attn_output[torch.isnan(attn_output)]=0
+            attn_output, _ = self.mha(query, keys, vals)
+        
         op = attn_output.permute(1,0,2)
         op = op.view(op.shape[0],self.sampler.H,self.sampler.W,-1)
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-        outputs = {'agg_encoding': op,'under_sampled_mask': mask_under}
+        test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
+        aug_feat,attn_masks,init_states=self.pad_tensor(test_feat,mask_map)
+        query1 = self.query_emb1(aug_feat).permute(1,0,2)
+        keys1 = self.key_emb1(aug_feat).permute(1,0,2)
+        vals1 = self.val_emb1(aug_feat).permute(1,0,2)
+        _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
+        attn_output_weights[torch.isnan(attn_output_weights)]=0
+        outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states}
         return outputs
+    
 
     @staticmethod
     def get_combined_encodings(context_enc: Dict) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -114,3 +130,23 @@ class RamAggregator(PredictionAggregator):
         combined_enc = torch.cat(encodings, dim=1)
         combined_masks = torch.cat(masks, dim=1).bool()
         return combined_enc, combined_masks
+
+    def pad_tensor(self,feat,mask):
+        max_num=max(mask.sum(dim=1))
+        device=feat.device
+        attn_masks=[]
+        image_batch = []
+        init_states=[]
+        init_pos=torch.zeros([self.sampler.H,self.sampler.W],device=device)
+        init_pos[self.compensation[0],self.compensation[1]]=1
+        for i,batch in enumerate(feat):
+            init_state=(init_pos.view(-1))[mask[i]]
+            aug_state=torch.cat((init_state, torch.zeros(max_num - init_state.size(0),device=device)), 0).unsqueeze(0)
+            init_states.append(aug_state)
+            valid_nodes=batch[mask[i]]
+            aug_nodes=torch.cat((valid_nodes, torch.zeros(max_num - valid_nodes.size(0),valid_nodes.size(1),device=device)), 0).unsqueeze(0)
+            image_batch.append(aug_nodes)
+            node_mask=aug_nodes.sum(dim=-1)==0
+            attn_mask=node_mask+node_mask.T
+            attn_masks.append(attn_mask.unsqueeze(0).repeat(self.num_heads,1,1))
+        return torch.cat(image_batch,dim=0).to(device),torch.cat(attn_masks,dim=0).to(device),torch.cat(init_states,dim=0).to(device)
