@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from math import exp
 from torch.autograd import Variable
 import torch.nn.functional as F
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 def gaussian(window_size, sigma=1.5):
     gauss = torch.Tensor([exp(-(x - window_size//2)**2/float(2*sigma**2)) for x in range(window_size)])
     return gauss#/gauss.sum()

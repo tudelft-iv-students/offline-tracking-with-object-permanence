@@ -6,7 +6,7 @@ import numpy as np
 from torchvision.models import resnet18, resnet34, resnet50
 # raise NotImplementedError()
 # from positional_encodings import PositionalEncodingPermute2D
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
 from typing import Dict
 def get_emb(sin_inp):
     """

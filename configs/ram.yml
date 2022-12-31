@@ -43,6 +43,7 @@ encoder_args:
 aggregator_type: 'ram'
 aggregator_args:
   pre_train: False
+  agg_type: 'concat'
   backbone: 'resnet18'
   target_agent_enc_size: 32
   map_extent: [-61, 61, -22, 100]
@@ -74,7 +75,7 @@ aggregator_args:
 # Decoder parameters
 decoder_type: 'ram_decoder'
 decoder_args:
-  agg_type: 'ram'
+  agg_type: 'concat'
   conc_range: 18
   map_extent: [-61, 61, -22, 100]
   resolution: 1
@@ -101,7 +102,7 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['focal_loss','drivable_loss']
+losses: ['focal_loss']
 loss_weights: [1,0.01]
 loss_args:
   - gauss_blur: True
@@ -110,10 +111,10 @@ loss_args:
     window_size: 7
     horizon: 12
     type: 'sum'
-  - type: 'sum'
 
 
-tr_metrics: ['focal_loss','drivable_loss']
+
+tr_metrics: ['focal_loss']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -121,9 +122,9 @@ tr_metric_args:
     window_size: 7
     horizon: 12
     type: 'sum'
-  - type: 'sum'
 
-val_metrics: ['focal_loss','drivable_loss']
+
+val_metrics: ['focal_loss']
 val_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -131,7 +132,7 @@ val_metric_args:
     window_size: 7
     horizon: 12
     type: 'sum'
-  - type: 'sum'
+
 
 
 log_freq: 100

@@ -4,7 +4,7 @@ from models.aggregators.aggregator import PredictionAggregator
 from models.library.blocks import *
 from models.library.RasterSampler import *
 from typing import Dict, Tuple
-from models.library.blocks import CNNBlock
+from models.library.blocks import CNNBlock,LayerNorm
 
 
 class RamAggregator(PredictionAggregator):
@@ -29,6 +29,7 @@ class RamAggregator(PredictionAggregator):
             input_channel=512+args['target_agent_enc_size']
         else:
             raise RuntimeError("The encoder should be a raster encoder!")
+        self.agg_type=args['agg_type']
         interm_channel=int((input_channel+args['context_enc_size'])/2)
         self.dim_reduction_block=nn.Sequential(
             nn.Conv2d(input_channel, interm_channel, kernel_size=1, stride=1, bias=False),
@@ -45,10 +46,21 @@ class RamAggregator(PredictionAggregator):
         self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
         self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
         ### Target nodes self-attention
-        self.query_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
-        self.key_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
-        self.val_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
-        self.mha1 = nn.MultiheadAttention(args['out_channels'], args['num_heads'])
+        if self.agg_type=='attention':
+            self.query_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+            self.key_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+            self.val_emb1 = nn.Linear(args['out_channels'], args['out_channels'])
+            self.mha1 = nn.MultiheadAttention(args['out_channels'], args['num_heads'])
+        elif self.agg_type=='concat':
+            self.deocde_block=nn.Sequential(
+                nn.Linear(2*args['emb_size']+2,args['emb_size']),
+                LayerNorm(args['emb_size']),
+                nn.LeakyReLU(),
+                nn.Linear(args['emb_size'],args['emb_size']//2),
+                LayerNorm(args['emb_size']//2),
+                nn.LeakyReLU(),
+                nn.Linear(args['emb_size']//2,1)
+            )
 
         self.sampler = Sampler(args,resolution=args['resolution'],apply_mask=True)
         self.num_heads = args['num_heads']
@@ -61,6 +73,7 @@ class RamAggregator(PredictionAggregator):
             self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
                                 CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
         self.resolution=args['resolution']
+        self.softmax=nn.Softmax(dim=-1)
         self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]).to(device))/self.resolution).int()
 
     def forward(self, encodings: Dict) -> torch.Tensor:
@@ -100,16 +113,52 @@ class RamAggregator(PredictionAggregator):
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-        test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
-        aug_feat,attn_masks,init_states=self.pad_tensor(test_feat,mask_map)
-        query1 = self.query_emb1(aug_feat).permute(1,0,2)
-        keys1 = self.key_emb1(aug_feat).permute(1,0,2)
-        vals1 = self.val_emb1(aug_feat).permute(1,0,2)
-        _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
-        attn_output_weights[torch.isnan(attn_output_weights)]=0
-        outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states}
+        if self.agg_type=='attention':
+            test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
+            aug_feat,attn_masks,init_states=self.pad_tensor(test_feat,mask_map)
+            query1 = self.query_emb1(aug_feat).permute(1,0,2)
+            keys1 = self.key_emb1(aug_feat).permute(1,0,2)
+            vals1 = self.val_emb1(aug_feat).permute(1,0,2)
+            _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
+            attn_output_weights[torch.isnan(attn_output_weights)]=0
+            outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states}
+        elif self.agg_type=='concat':
+            source_feat,target_feat=self.get_unfolded_feature(op,map_mask)
+            x_coord,y_coord=torch.meshgrid(torch.arange(self.conv_kernel//2,-((self.conv_kernel//2)+1),-self.resolution),
+                                        torch.arange(-(self.conv_kernel//2),((self.conv_kernel//2)+1),self.resolution))
+            diff=torch.cat([x_coord.unsqueeze(0),y_coord.unsqueeze(0)],dim=0).to(op.device)
+            connectivities=self.concat_feat(source_feat,target_feat,diff)
+            outputs = {'node_connectivity': connectivities,'under_sampled_mask': mask_map}
         return outputs
-    
+
+    def get_unfolded_feature(self,feature,mask):
+        ## Input shape B,C,H,W
+        kernel=self.conv_kernel
+        channel=feature.shape[1]
+        unfold = nn.Unfold(kernel_size=(kernel, kernel), dilation=1, padding=kernel//2, stride=(1, 1))
+        unfolded_feature=unfold(feature).permute(0,2,1) ## B,Number of slided window, channel*Number of elements in every window
+        # unfolded_feature=unfolded_feature.view(unfolded_feature.shape[0],unfolded_feature.shape[1],channel,kernel**2)
+        current_node_feat=feature.view(feature.shape[0],channel,-1).permute(0,2,1)## B,Number of slided window, channel
+        # unfolded_feature=(unfolded_feature*mask.unsqueeze(-1)).to_sparse()
+        # current_node_feat=(current_node_feat*mask.unsqueeze(-1)).to_sparse()
+        target_feat=[]
+        source_feat=[]
+        for idx,batch in enumerate(current_node_feat):
+            source_feat.append(batch[mask[idx]])
+            target_feat.append(unfolded_feature[idx][mask[idx]])
+        return source_feat,target_feat
+
+    def concat_feat(self,source_feat,target_feat,diff):
+        diff=diff.unsqueeze(0).to(source_feat[0].device)
+        channel=source_feat[0].shape[-1]
+        connectivities=[]
+        for idx,batch in enumerate(source_feat):
+            target_batch=target_feat[idx].view(target_feat[idx].shape[0],channel,-1).permute(0,2,1)
+            batch=batch.unsqueeze(-1).repeat(1,1,target_batch.shape[-2]).permute(0,2,1)
+            concat_feat=torch.cat((batch,target_batch,diff.repeat(batch.shape[0],1,1)),dim=-1)
+            connectivity=self.softmax((self.deocde_block(concat_feat)).squeeze(-1))
+            connectivities.append(connectivity)
+        return connectivities
 
     @staticmethod
     def get_combined_encodings(context_enc: Dict) -> Tuple[torch.Tensor, torch.Tensor]:

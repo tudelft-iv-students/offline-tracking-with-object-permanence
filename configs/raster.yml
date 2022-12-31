@@ -22,7 +22,7 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 32
+batch_size: 12
 num_workers: 8
 
 
@@ -53,8 +53,9 @@ aggregator_args:
   num_heads: 1
   convolute: True
   conv_kernel_ratio: 0.15
-  out_channels: 64
-
+  out_channels: 48
+  # out_channels: 64
+  
 # aggregator_type: 'home_agg'
 # aggregator_args:
 #   pre_train: False

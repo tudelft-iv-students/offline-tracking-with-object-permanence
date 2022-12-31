@@ -5,6 +5,27 @@ from typing import Dict, Union
 from models.decoders.utils import cluster_traj
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def get_index(pred,mask):
+    x_coord,y_coord=torch.meshgrid(torch.arange(0,122,1),
+                                torch.arange(0,122,1))
+    nodes_candidates=torch.cat((x_coord.unsqueeze(0),y_coord.unsqueeze(0)),dim=0).view(2,-1).T
+    nodes_2D=torch.zeros([mask.shape[0],pred.shape[-1],2])
+    for i in range(mask.shape[0]):
+        nodes_batch=nodes_candidates[mask[i]]
+        nodes_2D[i,:nodes_batch.shape[0]]=nodes_batch
+    return nodes_2D.int().permute(0,2,1).to(pred.device)
+
+def get_dense(pred,nodes_2D,H,W):
+    dense_rep=torch.empty(0,pred.shape[1],H,W,device=pred.device)
+    for batch in range(pred.shape[0]):
+        batch_heatmap=torch.empty(0,H,W,device=pred.device)
+        for step in range(pred.shape[1]):
+            heatmap=torch.sparse_coo_tensor(nodes_2D[batch],pred[batch,step],(122,122))
+            batch_heatmap=torch.cat((batch_heatmap,heatmap.to_dense().unsqueeze(0)),dim=0)
+        dense_rep=torch.cat((dense_rep,batch_heatmap.unsqueeze(0)),dim=0)
+    return dense_rep
+
+
 class RamDecoder(PredictionDecoder):
 
     def __init__(self, args):
@@ -24,7 +45,11 @@ class RamDecoder(PredictionDecoder):
         super().__init__()
         self.agg_type = args['agg_type']
         assert (args['agg_type'] == 'ram')
+        self.map_extent = args['map_extent']
         self.horizon=args['heatmap_channel']
+        self.resolution=args['resolution']
+        self.W = int((self.map_extent[1] - self.map_extent[0])/self.resolution)
+        self.H = int((self.map_extent[3] - self.map_extent[2])/self.resolution)
         # self.local_conc_range = int(args['conc_range']/args['resolution'])
         # self.agg_channel = args['agg_channel']
         # self.layers=[]
@@ -56,11 +81,13 @@ class RamDecoder(PredictionDecoder):
                 mask=None
 
 
-        predictions=torch.zeros_like(init_states.unsqueeze(1)).repeat(1,self.horizon,1)
+        predictions=torch.empty([init_states.shape[0],0,init_states.shape[-1]],device=attn_output_weights.device)
         prev_states=init_states.unsqueeze(1)
 
         for step in range(self.horizon):
-            predictions[:,step]=torch.bmm(prev_states,attn_output_weights).squeeze(1)
+            predictions=torch.cat((predictions,torch.bmm(prev_states,attn_output_weights)),dim=1)
             prev_states=predictions[:,step].unsqueeze(1)
-        
-        return {'pred': predictions,'mask': mask}
+        nodes_2D=get_index(predictions,mask)
+        pred=get_dense(predictions,nodes_2D,self.H,self.W)
+        return {'pred': pred,'mask': mask}
+        # return {'pred': predictions,'mask': mask}
