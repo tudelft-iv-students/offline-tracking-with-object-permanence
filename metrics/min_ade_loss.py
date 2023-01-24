@@ -1,16 +1,16 @@
 from metrics.metric import Metric
 from typing import Dict, Union
 import torch
-from metrics.utils import min_ade
+from metrics.utils import min_ade,min_fde_selection
 
 
-class MinADEK(Metric):
+class MinADE_loss(Metric):
     """
     Minimum average displacement error for the top K trajectories.
     """
     def __init__(self, args: Dict):
-        self.k = args['k']
-        self.name = 'min_ade_' + str(self.k)
+        self.threshold = args['threshold']
+        self.name = 'min_ade_loss' 
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -38,8 +38,8 @@ class MinADEK(Metric):
         # _, inds_topk = torch.topk(probs, min_k, dim=1)
         # batch_inds = torch.arange(batch_size).unsqueeze(1).repeat(1, min_k)
         # traj_topk = traj[batch_inds, inds_topk]
+        mask_bool=min_fde_selection(traj,traj_gt,masks,self.threshold)
 
-        # errs, _ = min_ade(traj_topk, traj_gt, masks)
         errs, _ = min_ade(traj, traj_gt, masks)
 
         return torch.mean(errs)

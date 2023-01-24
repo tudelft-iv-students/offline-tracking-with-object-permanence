@@ -9,9 +9,11 @@ import math
 import os
 import train_eval.utils as u
 from torchvision.utils import make_grid
+from models.decoders.ram_decoder import get_index,get_dense
 
 
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
 
 
 class Trainer:
@@ -147,27 +149,32 @@ class Trainer:
         # Main loop
         st_time = time.time()
         for i, data in enumerate(dl):
-
+            torch.cuda.empty_cache()
             # Load data
             data = u.send_to_device(u.convert_double_to_float(data))
 
             # Forward pass
             predictions = self.model(data['inputs'])
             if self.add_img:
-                if (self.current_epoch+1)%self.add_img_freq==0 and i==20:
-                    pred=torch.sum(predictions['pred'],dim=1,keepdim=True)
+                if (self.current_epoch+1)%self.add_img_freq==0 and (i+1)%2000 == 0:
+                    nodes_2D=get_index(predictions['pred'],predictions['mask'])
+                    dense_pred=get_dense(predictions['pred'],nodes_2D,self.model.decoder.H,self.model.decoder.W)
+                    pred=torch.sum(dense_pred,dim=1,keepdim=True)
                     self.writer.add_image(
-                        "pred", make_grid(pred.cpu(), nrow=8,padding=0 ,normalize=True),self.tb_iters
+                        "pred", make_grid(pred.cpu(), nrow=2,padding=0 ,normalize=True),self.tb_iters
                     )
-                    _,gs_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['pred'].shape)
+                    _,gs_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['mask'],visualize=True)
                     gs_map=torch.sum(gs_map,dim=1,keepdim=True)
                     self.writer.add_image(
-                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=8, normalize=True),self.tb_iters
+                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=2, normalize=True),self.tb_iters
                     )
+                    torch.cuda.empty_cache()
 
             # Compute loss and backprop if training
             if mode == 'train':
                 loss = self.compute_loss(predictions, data['ground_truth'])
+                # print('################ Memory usage after compute loss ####################')
+                # print(torch.cuda.memory_summary(device=device, abbreviated=False))
                 self.back_prop(loss)
 
             # Keep time
@@ -208,9 +215,18 @@ class Trainer:
         Backpropagate loss
         """
         self.optimizer.zero_grad()
-        loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip_thresh)
-        self.optimizer.step()
+        torch.cuda.empty_cache()
+        # print('################ Memory usage before back propagation ####################')
+        # print(torch.cuda.memory_summary(device=device, abbreviated=False))
+        try:
+            loss.backward()
+            # print('################ Memory usage after back propagation ####################')
+            # print(torch.cuda.memory_summary(device=device, abbreviated=False))
+            torch.cuda.empty_cache()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), grad_clip_thresh)
+            self.optimizer.step()
+        except: 
+            print('Error happens in back propagation! Probably memory not enough!')
 
     def initialize_metrics_for_epoch(self, mode: str):
         """

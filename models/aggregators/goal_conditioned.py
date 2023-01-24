@@ -4,8 +4,9 @@ from models.aggregators.global_attention import GlobalAttention
 from typing import Dict
 from torch.distributions import Categorical
 
+from return_device import return_device
+device = return_device()
 
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 
 class GoalConditioned(GlobalAttention):

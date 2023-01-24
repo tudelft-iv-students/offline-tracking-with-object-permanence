@@ -11,7 +11,8 @@ from nuscenes.prediction.input_representation.combinators import Rasterizer
 import train_eval.utils as u
 import imageio
 import os
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
 
 
 class Visualizer:

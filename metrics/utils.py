@@ -46,6 +46,32 @@ def max_dist(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> 
 
     return dist
 
+def min_fde_selection(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor, threshold) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Computes final displacement error for the best trajectory is a set, with respect to ground truth
+    :param traj: predictions, shape [batch_size, num_modes, sequence_length, 2]
+    :param traj_gt: ground truth trajectory, shape [batch_size, sequence_length, 2]
+    :param masks: masks for varying length ground truth, shape [batch_size, sequence_length]
+    :return errs, inds: errors and indices for modes with min error, shape [batch_size]
+    """
+    num_modes = traj.shape[1]
+    traj_gt_rpt = traj_gt.unsqueeze(1).repeat(1, num_modes, 1, 1)
+    lengths = torch.sum(1-masks, dim=1).long()
+    inds = lengths.unsqueeze(1).unsqueeze(2).unsqueeze(3).repeat(1, num_modes, 1, 2) - 1
+
+    traj_last = torch.gather(traj[..., :2], dim=2, index=inds).squeeze(2)
+    traj_gt_last = torch.gather(traj_gt_rpt, dim=2, index=inds).squeeze(2)
+
+    err = traj_gt_last - traj_last[..., 0:2]
+    err = torch.pow(err, exponent=2)
+    err = torch.sum(err, dim=2)
+    err = torch.pow(err, exponent=0.5)
+    _, inds = torch.min(err, dim=1)
+    mask_bool= err <= threshold
+    for i in range(len(inds)):
+        mask_bool[i,inds[i]]=True
+    return mask_bool.float()
+
 
 def min_mse(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """

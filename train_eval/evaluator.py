@@ -12,7 +12,9 @@ import json
 
 
 # Initialize device:
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
+
 
 
 class Evaluator:

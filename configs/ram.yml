@@ -22,7 +22,7 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 6
+batch_size: 4
 num_workers: 8
 
 
@@ -43,7 +43,7 @@ encoder_args:
 aggregator_type: 'ram'
 aggregator_args:
   pre_train: False
-  agg_type: 'concat'
+  agg_type: 'attention'
   backbone: 'resnet18'
   target_agent_enc_size: 32
   map_extent: [-61, 61, -22, 100]
@@ -54,7 +54,7 @@ aggregator_args:
   num_heads: 2
   convolute: True
   conv_kernel_ratio: 0.15
-  out_channels: 64
+  out_channels: 48
 
 # aggregator_type: 'home_agg'
 # aggregator_args:
@@ -75,13 +75,19 @@ aggregator_args:
 # Decoder parameters
 decoder_type: 'ram_decoder'
 decoder_args:
-  agg_type: 'concat'
+  agg_type: 'attention'
   conc_range: 18
   map_extent: [-61, 61, -22, 100]
   resolution: 1
-  agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
+  agg_channel: 48 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
   decoder_depth: 3
   heatmap_channel: 12
+  output_traj: True
+  num_target: 12
+  sample_radius: 2
+  target_agent_enc_size: 32
+  emb_size: 128
+  diff_emb: 10
 
 # decoder_type: 'home'
 # decoder_args:
@@ -102,8 +108,8 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['focal_loss']
-loss_weights: [1,0.01]
+losses: ['focal_loss','min_ade_k']
+loss_weights: [2.5,0.05]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -111,10 +117,11 @@ loss_args:
     window_size: 7
     horizon: 12
     type: 'sum'
+  - k: 10
 
 
 
-tr_metrics: ['focal_loss']
+tr_metrics: ['focal_loss','min_ade_k', 'miss_rate_k']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -122,9 +129,12 @@ tr_metric_args:
     window_size: 7
     horizon: 12
     type: 'sum'
+  - k: 10
+  - k: 10
+    dist_thresh: 2
 
 
-val_metrics: ['focal_loss']
+val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k']
 val_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -132,7 +142,12 @@ val_metric_args:
     window_size: 7
     horizon: 12
     type: 'sum'
-
+  - k: 10
+  - k: 10
+    dist_thresh: 2
+  - k: 5
+  - k: 5
+    dist_thresh: 2
 
 
 log_freq: 100

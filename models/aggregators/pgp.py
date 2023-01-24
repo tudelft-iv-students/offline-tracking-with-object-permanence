@@ -6,7 +6,9 @@ from typing import Dict
 from torch.distributions import Categorical
 # from positional_encodings import PositionalEncoding1D
 # from positional_encodings.torch_encodings import PositionalEncoding1D
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
+
 
 def get_emb(sin_inp):
     """

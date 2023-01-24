@@ -5,7 +5,8 @@ from models.library.blocks import *
 from models.library.RasterSampler import *
 from typing import Dict, Tuple
 from models.library.blocks import CNNBlock,LayerNorm
-
+from return_device import return_device
+device = return_device()
 
 class RamAggregator(PredictionAggregator):
     """
@@ -114,14 +115,14 @@ class RamAggregator(PredictionAggregator):
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
         if self.agg_type=='attention':
-            test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
-            aug_feat,attn_masks,init_states=self.pad_tensor(test_feat,mask_map)
+            # test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
+            aug_feat,attn_masks,init_states=self.pad_tensor(op.view(op.shape[0],op.shape[1],-1).permute(0,2,1),mask_map)
             query1 = self.query_emb1(aug_feat).permute(1,0,2)
             keys1 = self.key_emb1(aug_feat).permute(1,0,2)
             vals1 = self.val_emb1(aug_feat).permute(1,0,2)
             _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
             attn_output_weights[torch.isnan(attn_output_weights)]=0
-            outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states}
+            outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states,'feature': op, 'target_encodings':target_agent_enc}
         elif self.agg_type=='concat':
             source_feat,target_feat=self.get_unfolded_feature(op,map_mask)
             x_coord,y_coord=torch.meshgrid(torch.arange(self.conv_kernel//2,-((self.conv_kernel//2)+1),-self.resolution),
@@ -189,8 +190,8 @@ class RamAggregator(PredictionAggregator):
         init_pos=torch.zeros([self.sampler.H,self.sampler.W],device=device)
         init_pos[self.compensation[0],self.compensation[1]]=1
         for i,batch in enumerate(feat):
-            init_state=(init_pos.view(-1))[mask[i]]
-            aug_state=torch.cat((init_state, torch.zeros(max_num - init_state.size(0),device=device)), 0).unsqueeze(0)
+            init_state=((init_pos.view(-1))[mask[i]]).to_sparse()
+            aug_state=torch.cat((init_state, torch.sparse_coo_tensor(torch.empty([1,0]), [], [max_num - init_state.size(0),],device=device)), 0).unsqueeze(0)
             init_states.append(aug_state)
             valid_nodes=batch[mask[i]]
             aug_nodes=torch.cat((valid_nodes, torch.zeros(max_num - valid_nodes.size(0),valid_nodes.size(1),device=device)), 0).unsqueeze(0)

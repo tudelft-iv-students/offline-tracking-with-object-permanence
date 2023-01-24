@@ -2,7 +2,9 @@ from skimage.transform import resize
 from typing import Dict
 import torch
 import numpy as np
-device = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
+
 
 class Sampler():
     """

@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence
 from typing import Dict
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
 
 
 class PGPEncoder(PredictionEncoder):

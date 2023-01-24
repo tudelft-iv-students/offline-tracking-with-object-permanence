@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union
 from models.decoders.utils import cluster_traj
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+from return_device import return_device
+device = return_device()
+
 
 class HomeDecoder(PredictionDecoder):
 

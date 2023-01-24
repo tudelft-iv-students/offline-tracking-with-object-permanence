@@ -22,7 +22,7 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 12
+batch_size: 6
 num_workers: 8
 
 
@@ -82,6 +82,7 @@ decoder_args:
   agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
   decoder_depth: 3
   heatmap_channel: 12
+
 
 # decoder_type: 'home'
 # decoder_args:

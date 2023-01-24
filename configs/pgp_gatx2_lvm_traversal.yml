@@ -24,7 +24,7 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 32
+batch_size: 6
 num_workers: 4
 
 
