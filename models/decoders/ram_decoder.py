@@ -8,9 +8,9 @@ from return_device import return_device
 device = return_device()
 
 
-def get_index(pred,mask):
-    x_coord,y_coord=torch.meshgrid(torch.arange(0,122,1), ##### SHould be changed when image size changes
-                                torch.arange(0,122,1))
+def get_index(pred,mask,H=122,W=122):
+    x_coord,y_coord=torch.meshgrid(torch.arange(0,H,1), ##### SHould be changed when image size changes
+                                torch.arange(0,W,1))
     nodes_candidates=torch.cat((x_coord.unsqueeze(0),y_coord.unsqueeze(0)),dim=0).view(2,-1).T
     nodes_2D=torch.zeros([mask.shape[0],pred.shape[-1],2])
     for i in range(mask.shape[0]):
@@ -47,14 +47,16 @@ class RamDecoder(PredictionDecoder):
         """
         super().__init__()
         self.agg_type = args['agg_type']
-        assert (args['agg_type'] == 'attention')
+        assert (args['agg_type'] == 'attention' or args['agg_type'] == 'concat')
         self.map_extent = args['map_extent']
         self.horizon=args['heatmap_channel']
         self.resolution=args['resolution']
         self.W = int((self.map_extent[1] - self.map_extent[0])/self.resolution)
         self.H = int((self.map_extent[3] - self.map_extent[2])/self.resolution)
         self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]))/self.resolution).int()
+        # self.compensation=torch.tensor([98,59])
         self.output_traj = args['output_traj']
+        self.pretrain_mlp = args['pretrain_mlp']
         if self.output_traj:
             self.diff_emb=args['diff_emb']
             self.feature_dim=args['target_agent_enc_size']+args['agg_channel']+self.diff_emb
@@ -101,6 +103,24 @@ class RamDecoder(PredictionDecoder):
             
 
         torch.cuda.empty_cache()
+        if self.pretrain_mlp:
+            gt_traj=inputs['gt_traj']
+            final_points=gt_traj[:,-1].unsqueeze(1)
+            swapped=torch.zeros_like(final_points,device=gt_traj.device)
+            swapped[:,:,0],swapped[:,:,1]=-final_points[:,:,1],final_points[:,:,0]
+            endpoints=torch.round(swapped/self.resolution+self.compensation.to(swapped.device)).long()
+            concat_feature=torch.empty([0,1,self.feature_dim],device=map_feature.device)
+            for batch_idx in range(len(gt_traj)):
+                map_feat = (map_feature[batch_idx])[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]
+                diff = final_points[batch_idx]
+                # diff = (endpoints[batch_idx]-self.compensation.to(device))*self.resolution
+                # diff[:.0] = -diff[:.0]
+                feature=torch.cat([map_feat,self.diff_encoder(diff),target_encodings[batch_idx].unsqueeze(0)],dim=-1).unsqueeze(0)
+                concat_feature=torch.cat([concat_feature,feature],dim=0)
+            trajectories=self.decoder(concat_feature).view(gt_traj.shape[0],1,self.horizon,2)
+            torch.cuda.empty_cache()
+            return {'pred': None,'mask': mask,'traj': trajectories,'probs':None,'endpoints':endpoints}
+        
         predictions=torch.empty([init_states.shape[0],0,init_states.shape[-1]],device=attn_output_weights.device)
         prev_states=init_states.unsqueeze(1).to_dense()
 
@@ -110,13 +130,13 @@ class RamDecoder(PredictionDecoder):
 
         
         if self.output_traj:
-            nodes_2D=get_index(predictions[:,-1].unsqueeze(1),mask)
+            nodes_2D=get_index(predictions[:,-1].unsqueeze(1),mask,self.H,self.W)
             dense_pred=get_dense(predictions[:,-1].unsqueeze(1),nodes_2D,self.H,self.W)
             endpoints,confidences = self.endpoint_sampler(dense_pred)
             endpoints=endpoints.long()
             concat_feature=torch.empty([0,self.num_target,self.feature_dim],device=attn_output_weights.device)
-            x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[-1],self.map_extent[-2],-1), ##### SHould be changed when image size changes
-                                            torch.arange(self.map_extent[0],self.map_extent[1],1))
+            x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[-1],self.map_extent[-2],-self.resolution), ##### SHould be changed when image size changes
+                                            torch.arange(self.map_extent[0],self.map_extent[1],self.resolution))
             indices=torch.cat([x_coord.unsqueeze(-1),y_coord.unsqueeze(-1)],dim=-1).to(attn_output_weights.device)
             for batch_idx in range(len(dense_pred)):
                 map_feat = (map_feature[batch_idx])[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]
@@ -128,6 +148,7 @@ class RamDecoder(PredictionDecoder):
             trajectories=self.decoder(concat_feature).view(dense_pred.shape[0],self.num_target,self.horizon,2)
             torch.cuda.empty_cache()
             return {'pred': predictions,'mask': mask,'traj': trajectories,'probs':confidences,'endpoints':endpoints}
+
         torch.cuda.empty_cache()
         # print('################ Memory usage after forward pass ####################')
         # print(torch.cuda.memory_summary(device=predictions.device, abbreviated=False))

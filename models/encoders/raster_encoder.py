@@ -129,6 +129,7 @@ class RasterEncoder(PredictionEncoder):
         surrounding_agent_representation = inputs['surrounding_agent_representation'].to(device)
         map_representation = inputs['map_representation'][0].to(device)
         
+        
         # Apply Conv layers
         rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1).type(torch.float32)
         context_encoding = self.backbone(rasterized_input)
@@ -157,4 +158,8 @@ class RasterEncoder(PredictionEncoder):
                                           'pedestrian_masks': None
                                           },
                      }
+        if inputs['gt_traj'] is  not None:
+            encodings['gt_traj']= inputs['gt_traj']
+        else:
+            encodings['gt_traj']= None
         return encodings

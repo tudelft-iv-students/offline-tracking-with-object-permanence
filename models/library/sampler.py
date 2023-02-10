@@ -33,6 +33,7 @@ class TorchModalitySampler(nn.Module):
 
     @torch.no_grad()
     def forward(self, heatmap: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        ## Input shape [B,C,H,W]
         batch_size = heatmap.shape[0]
         hm = torch.clone(heatmap)
         hm = TF.resize(hm, size=[self._upscale*hm.shape[-1], self._upscale*hm.shape[-1]])

@@ -137,7 +137,14 @@ runs/
 model_best.pth
 
 preprocess/
-datasets/
-__pycache__/
+
+
 output/tensorboard_logs/
 output/checkpoints/
+preprocess_raster/
+output/test/
+output/test_home/
+*__pycache__/
+*tensorboard_logs/
+*checkpoints/
+*.tar

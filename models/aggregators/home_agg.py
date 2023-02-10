@@ -90,7 +90,9 @@ class Sample2DAggregator(PredictionAggregator):
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-        outputs = {'agg_encoding': op,'under_sampled_mask': mask_under}
+        outputs = {'agg_encoding': op,'under_sampled_mask': mask_under,'target_encodings':target_agent_enc}
+        if encodings['gt_traj'] is  not None:
+            outputs['gt_traj']= encodings['gt_traj']
         return outputs
 
     @staticmethod

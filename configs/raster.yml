@@ -4,6 +4,7 @@ version: 'v1.0-trainval'
 agent_setting: 'single_agent'
 input_representation: 'raster'
 
+
 train_set_args: &ds_args
   split: 'train'
   t_h: 2
@@ -22,8 +23,8 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 6
-num_workers: 8
+batch_size: 8
+num_workers: 6
 
 
 
@@ -43,6 +44,7 @@ encoder_args:
 aggregator_type: '2D_sample'
 aggregator_args:
   pre_train: False
+  agg_type: 'attention'
   backbone: 'resnet18'
   target_agent_enc_size: 32
   map_extent: [-61, 61, -22, 100]
@@ -50,12 +52,11 @@ aggregator_args:
   img_size: [488,488]
   resolution: 1
   emb_size: 128
-  num_heads: 1
+  num_heads: 2
   convolute: True
   conv_kernel_ratio: 0.15
   out_channels: 48
-  # out_channels: 64
-  
+
 # aggregator_type: 'home_agg'
 # aggregator_args:
 #   pre_train: False
@@ -79,10 +80,16 @@ decoder_args:
   conc_range: 18
   map_extent: [-61, 61, -22, 100]
   resolution: 1
-  agg_channel: 64 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
+  agg_channel: 48 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
   decoder_depth: 3
   heatmap_channel: 12
-
+  output_traj: True
+  num_target: 20
+  sample_radius: 3
+  target_agent_enc_size: 32
+  emb_size: 128
+  diff_emb: 10
+  pretrain_mlp: False
 
 # decoder_type: 'home'
 # decoder_args:
@@ -98,42 +105,84 @@ decoder_args:
 
 # Optimizer parameters
 optim_args:
-  lr: 0.002
-  scheduler_step: 10
+  lr: 0.001
+  scheduler_step: 4
   scheduler_gamma: 0.5
 
-
-losses: ['focal_loss','drivable_loss']
-loss_weights: [1,0.01]
+# Full parameters
+losses: ['focal_loss','min_ade_loss','drivable_loss']
+loss_weights: [0.2,0.001,0.01]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
     resolution: 1
-    window_size: 7
+    window_size: 5
     horizon: 12
     type: 'sum'
+    reduce_map: False
+  - dummy: 0
   - type: 'sum'
 
 
-tr_metrics: ['focal_loss','drivable_loss']
+
+tr_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_fde_k']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
     resolution: 1
-    window_size: 7
+    window_size: 5
     horizon: 12
     type: 'sum'
-  - type: 'sum'
+    reduce_map: False
+  - k: 10
+  - k: 10
+    dist_thresh: 2
+  - k: 10
 
-val_metrics: ['focal_loss','drivable_loss']
+
+val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k' , 'min_fde_k']
 val_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
     resolution: 1
-    window_size: 7
+    window_size: 5
     horizon: 12
     type: 'sum'
-  - type: 'sum'
+    reduce_map: False
+  - k: 10
+  - k: 10
+    dist_thresh: 2
+  - k: 5
+  - k: 5
+    dist_thresh: 2
+  - k: 10
+
+
+# Pretraining MLP decoders
+# losses: ['min_ade_loss','min_fde_k']
+# loss_weights: [1.0,0.2]
+# loss_args:
+#   - k: 10
+#   - k: 10
+
+
+
+# tr_metrics: ['min_fde_k','min_ade_k', 'miss_rate_k']
+# tr_metric_args:
+#   - k: 10
+#   - k: 10
+#   - k: 10
+#     dist_thresh: 2
+
+
+# val_metrics: ['min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k']
+# val_metric_args:
+#   - k: 10
+#   - k: 10
+#     dist_thresh: 2
+#   - k: 5
+#   - k: 5
+#     dist_thresh: 2
 
 
 log_freq: 100

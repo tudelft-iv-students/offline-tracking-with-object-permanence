@@ -27,7 +27,7 @@ class MissRateK(Metric):
         traj_gt = ground_truth['traj'] if type(ground_truth) == dict else ground_truth
 
         # Useful params
-        batch_size = probs.shape[0]
+        batch_size = traj.shape[0]
         num_pred_modes = traj.shape[1]
         sequence_length = traj.shape[2]
 

@@ -37,7 +37,7 @@ class Trainer:
         train_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['train_set_args']] + spec_args)
         val_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['val_set_args']] + spec_args)
         datasets = {'train': train_set, 'val': val_set}
-
+        self.pretrain_mlp = cfg['decoder_args']['pretrain_mlp']
         # Initialize dataloaders
         self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
                                            num_workers=cfg['num_workers'], pin_memory=True)
@@ -114,23 +114,26 @@ class Trainer:
             self.print_metrics(train_epoch_metrics, self.tr_dl, mode='train')
 
             # Validate
-            with torch.no_grad():
-                val_epoch_metrics = self.run_epoch('val', self.val_dl)
-            self.print_metrics(val_epoch_metrics, self.val_dl, mode='val')
+            try:
+                with torch.no_grad():
+                    val_epoch_metrics = self.run_epoch('val', self.val_dl)
+                self.print_metrics(val_epoch_metrics, self.val_dl, mode='val')
 
-            # Scheduler step
-            self.scheduler.step()
+                # Scheduler step
+                self.scheduler.step()
 
-            # Update validation metric
-            self.val_metric = val_epoch_metrics[self.val_metrics[0].name] / val_epoch_metrics['minibatch_count']
+                # Update validation metric
+                self.val_metric = val_epoch_metrics[self.val_metrics[0].name] / val_epoch_metrics['minibatch_count']
 
-            # save best checkpoint when applicable
-            if self.val_metric < self.min_val_metric:
-                self.min_val_metric = self.val_metric
-                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', 'best.tar'))
+                # save best checkpoint when applicable
+                if self.val_metric < self.min_val_metric:
+                    self.min_val_metric = self.val_metric
+                    self.save_checkpoint(os.path.join(output_dir, 'checkpoints', 'best.tar'))
 
-            # Save checkpoint
-            self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
+                # Save checkpoint
+                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
+            except:
+                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
 
     def run_epoch(self, mode: str, dl: torch_data.DataLoader):
         """
@@ -152,27 +155,146 @@ class Trainer:
             torch.cuda.empty_cache()
             # Load data
             data = u.send_to_device(u.convert_double_to_float(data))
-
+            if self.pretrain_mlp:
+                data['inputs']['gt_traj']=data['ground_truth']['traj']
+            else: 
+                data['inputs']['gt_traj']= None
             # Forward pass
             predictions = self.model(data['inputs'])
             if self.add_img:
-                if (self.current_epoch+1)%self.add_img_freq==0 and (i+1)%2000 == 0:
-                    nodes_2D=get_index(predictions['pred'],predictions['mask'])
-                    dense_pred=get_dense(predictions['pred'],nodes_2D,self.model.decoder.H,self.model.decoder.W)
-                    pred=torch.sum(dense_pred,dim=1,keepdim=True)
-                    self.writer.add_image(
-                        "pred", make_grid(pred.cpu(), nrow=2,padding=0 ,normalize=True),self.tb_iters
-                    )
-                    _,gs_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['mask'],visualize=True)
-                    gs_map=torch.sum(gs_map,dim=1,keepdim=True)
-                    self.writer.add_image(
-                        "gt_heatmap", make_grid(gs_map.cpu(), nrow=2, normalize=True),self.tb_iters
-                    )
+                if (self.current_epoch+1)%self.add_img_freq==0 and i%2000 == 0:
+                    def visualize(mode):
+                        if mode == 'endpoints':
+                            shape=[predictions['mask'].shape[0],1,self.losses[0].H,self.losses[0].W]
+                            endpoint_map=predictions['mask'].clone().view(shape)
+                            endpoints=predictions['endpoints']
+                            for batch in range(shape[0]):
+                                for point in endpoints[batch]:
+                                    x,y=point
+                                    endpoint_map[batch,0,max(0,x-1):min(x+2,shape[-2]),max(0,y-1):min(shape[-1],y+2)]=0
+                            self.writer.add_image(
+                                "endpoints", make_grid(endpoint_map.float(), nrow=4,padding=0 ,normalize=True),self.tb_iters
+                            )
+                        if mode == 'last_step_heatmap':
+                            if self.losses[0].reduce_map:
+                                nodes_2D=get_index(predictions['pred'],predictions['mask'],self.losses[0].H,self.losses[0].W)
+                                sparse_rep=(predictions['pred'][:,-1]).clone().detach()
+                                # normalize_factor,_=torch.max(sparse_rep,dim=-1,keepdim=True)
+                                # sparse_rep/=normalize_factor
+                                dense_pred=get_dense(sparse_rep.unsqueeze(1),nodes_2D,self.model.decoder.H,self.model.decoder.W).cpu()
+                                self.writer.add_image(
+                                    "last_step_heatmap", make_grid(dense_pred, nrow=4,padding=0 ,normalize=True),self.tb_iters
+                                )
+                            else:
+                                
+                                self.writer.add_image(
+                                    "last_step_heatmap", make_grid(predictions['pred'][:,-1].unsqueeze(1).cpu(), nrow=4,padding=0 ,normalize=True),self.tb_iters
+                                )
+                        if mode == 'traj':
+                            gt_map=self.losses[0].generate_gtmap(predictions['traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
+                            gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
+                            self.writer.add_image(
+                                "trajectory_heatmap", make_grid(gt_map.cpu(), nrow=4, normalize=True),self.tb_iters
+                            )
+                        if mode == 'all':
+                            traj_idx=0
+                            gt_map=self.losses[0].generate_gtmap(predictions['traj'][:,traj_idx].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
+                            gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
+                            mask_map=gt_map.clone()
+                            mask_map[predictions['mask'].view(gt_map.shape)]=0.5
+                            gt_map+=mask_map
+                            gt_map=gt_map.repeat(1,3,1,1)
+                            gt_map*=127
+                            endpoints=predictions['endpoints']
+                            for batch in range(gt_map.shape[0]):
+                                for i,point in enumerate(endpoints[batch]):
+                                    if i== traj_idx:
+                                        x,y=point
+                                        gt_map[batch,:-1,max(0,x-2):min(x+3,self.losses[0].H),max(0,y-2):min(self.losses[0].W,y+3)]=0
+                                        gt_map[batch,-1,max(0,x-2):min(x+3,self.losses[0].H),max(0,y-2):min(self.losses[0].W,y+3)]=255
+                                        
+                                    else:
+                                        x,y=point
+                                        gt_map[batch,1:,max(0,x-1):min(x+3,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+1)]=0
+                                        gt_map[batch,0,max(0,x-1):min(x+1,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+1)]=255
+                            self.writer.add_image(
+                                "all", make_grid(gt_map.cpu(), nrow=4, normalize=True),self.tb_iters
+                            )
+                                        
+                    if not self.pretrain_mlp:
+                        visualize('all')
+                        visualize('last_step_heatmap')
+                        visualize('traj')
+                        if self.losses[0].reduce_map:
+                            nodes_2D=get_index(predictions['pred'],predictions['mask'],self.losses[0].H,self.losses[0].W)
+                            dense_pred=get_dense(predictions['pred'].clone().detach(),nodes_2D,self.model.decoder.H,self.model.decoder.W)
+                            pred=torch.sum(dense_pred,dim=1,keepdim=True)
+                            self.writer.add_image(
+                                "pred", make_grid(pred.cpu(), nrow=2,padding=0 ,normalize=True),self.tb_iters
+                            )
+                        else:
+                            pred=torch.sum(predictions['pred'],dim=1,keepdim=True)
+                            self.writer.add_image(
+                                "pred", make_grid(pred.cpu(), nrow=2,padding=0 ,normalize=True),self.tb_iters
+                            )
+                        gt_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['mask'],visualize=True)
+                        gt_map=torch.sum(gt_map,dim=1,keepdim=True)
+                        self.writer.add_image(
+                            "gt_heatmap", make_grid(gt_map.cpu(), nrow=2, normalize=True),self.tb_iters
+                        )
+                    else:
+                        shape=[predictions['mask'].shape[0],1,self.model.decoder.H,self.model.decoder.W]
+                        swapped=torch.zeros_like(data['ground_truth']['traj'])
+                        swapped[:,:,0],swapped[:,:,1]=-data['ground_truth']['traj'][:,:,1],data['ground_truth']['traj'][:,:,0]
+                        coord=torch.round(swapped/self.model.decoder.resolution+self.model.decoder.compensation.to(swapped.device)).int()
+                        coord=torch.clamp(coord,0,shape[-1])
+                        gt_map=torch.zeros(shape)
+                        for batch in range(shape[0]):
+                            for t in range(coord.shape[1]):
+                                x,y=coord[batch,t]
+                                gt_map[batch,0,x-1:x+2,y-1:y+2]=1##Only one ground truth in each heatmap layer
+                        # gt_map=torch.sum(gt_map,dim=1,keepdim=True)
+                        self.writer.add_image(
+                            "traj_heatmap", make_grid(gt_map.cpu(), nrow=4, normalize=True),self.tb_iters
+                        )
+                        endpoint_map=torch.zeros(shape)
+                        endpoints=predictions['endpoints']
+                        for batch in range(shape[0]):
+                            for point in endpoints[batch]:
+                                x,y=point
+                                endpoint_map[batch,0,max(0,x-2):min(x+3,shape[-2]),max(0,y-2):min(shape[-1],y+3)]=1
+                        self.writer.add_image(
+                            "endpoints", make_grid(endpoint_map, nrow=4,padding=0 ,normalize=True),self.tb_iters
+                        )
                     torch.cuda.empty_cache()
 
             # Compute loss and backprop if training
             if mode == 'train':
                 loss = self.compute_loss(predictions, data['ground_truth'])
+                if torch.isnan(loss):
+                    visualize('all')
+                    visualize('last_step_heatmap')
+                    visualize('traj')
+                    nodes_2D=get_index(predictions['pred'],predictions['mask'],self.losses[0].H,self.losses[0].W)
+                    dense_pred=get_dense(predictions['pred'].clone().detach(),nodes_2D,self.model.decoder.H,self.model.decoder.W)
+                    pred=torch.sum(dense_pred,dim=1,keepdim=True)
+                    self.writer.add_image(
+                        "pred", make_grid(pred.cpu(), nrow=2,padding=0 ,normalize=True),self.tb_iters
+                    )
+                    gt_map=self.losses[0].generate_gtmap(data['ground_truth']['traj'],predictions['mask'],visualize=True)
+                    gt_map=torch.sum(gt_map,dim=1,keepdim=True)
+                    self.writer.add_image(
+                        "gt_heatmap", make_grid(gt_map.cpu(), nrow=2, normalize=True),self.tb_iters
+                    )
+                    # sum=predictions['init_states'].view(predictions['init_states'].shape[0],-1).sum(dim=-1)
+                    # corrupt_idx=torch.argmin(sum).item()
+                    # corrupt_map=predictions['mask'][corrupt_idx].view(self.model.decoder.H,self.model.decoder.W)
+                    # print(sum)
+                    # print(corrupt_map[self.model.decoder.compensation[0]-1:self.model.decoder.compensation[0]+2,self.model.decoder.compensation[1]-1:self.model.decoder.compensation[1]+2])
+                    # for loss in self.losses:
+                    #     print(loss.name,':')
+                    #     print(loss.compute(predictions, data['ground_truth']).item())
+                    raise NotImplementedError()
                 # print('################ Memory usage after compute loss ####################')
                 # print(torch.cuda.memory_summary(device=device, abbreviated=False))
                 self.back_prop(loss)
@@ -323,3 +445,5 @@ class Trainer:
             if metric_name != 'minibatch_count' and metric_name != 'time_elapsed':
                 metric_val /= epoch_metrics['minibatch_count']
                 self.writer.add_scalar('val/' + metric_name, metric_val, self.tb_iters)
+
+        self.tb_iters += 1

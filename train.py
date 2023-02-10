@@ -34,7 +34,7 @@ writer = SummaryWriter(log_dir=os.path.join(args.output_dir, 'tensorboard_logs')
 
 
 # Train
-trainer = Trainer(cfg, args.data_root, args.data_dir, checkpoint_path=args.checkpoint, writer=writer)
+trainer = Trainer(cfg, args.data_root, args.data_dir, checkpoint_path=args.checkpoint, writer=writer,just_weights=False)
 trainer.train(num_epochs=int(args.num_epochs), output_dir=args.output_dir)
 
 

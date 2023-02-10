@@ -33,13 +33,13 @@ class MinADEK(Metric):
         masks = ground_truth['masks'] if type(ground_truth) == dict and 'masks' in ground_truth.keys() \
             else torch.zeros(batch_size, sequence_length).to(traj.device)
 
-        # min_k = min(self.k, num_pred_modes)
+        min_k = min(self.k, num_pred_modes)
 
-        # _, inds_topk = torch.topk(probs, min_k, dim=1)
-        # batch_inds = torch.arange(batch_size).unsqueeze(1).repeat(1, min_k)
-        # traj_topk = traj[batch_inds, inds_topk]
+        _, inds_topk = torch.topk(probs, min_k, dim=1)
+        batch_inds = torch.arange(batch_size).unsqueeze(1).repeat(1, min_k)
+        traj_topk = traj[batch_inds, inds_topk]
 
-        # errs, _ = min_ade(traj_topk, traj_gt, masks)
-        errs, _ = min_ade(traj, traj_gt, masks)
+        errs, _ = min_ade(traj_topk, traj_gt, masks)
+        # errs, _ = min_ade(traj, traj_gt, masks)
 
         return torch.mean(errs)

@@ -31,6 +31,7 @@ class Sampler():
             self.resize = True
         self.W = int((self.map_extent[1] - self.map_extent[0])/self.resolution)
         self.H = int((self.map_extent[3] - self.map_extent[2])/self.resolution)
+        self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]).to(device))/self.resolution).int()
 
     def sample_mask(self,mask):
         """
@@ -42,7 +43,9 @@ class Sampler():
             np_mask=np.array(mask.permute(1,2,0))
             np_mask=resize(np_mask,[self.H,self.W]).transpose(2,0,1)
             binary_mask=torch.tensor(np_mask).type(torch.bool)
+            binary_mask[:,self.compensation[0],self.compensation[1]]=True
             binary_mask=binary_mask.view(binary_mask.shape[0],-1)
+            
 
         
         return binary_mask.to(device)

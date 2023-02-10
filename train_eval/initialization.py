@@ -31,6 +31,7 @@ from models.decoders.home_decoder import HomeDecoder
 # Import metrics
 from metrics.mtp_loss import MTPLoss
 from metrics.min_ade import MinADEK
+from metrics.min_ade_loss import MinADE_loss
 from metrics.min_fde import MinFDEK
 from metrics.miss_rate import MissRateK
 from metrics.covernet_loss import CoverNetLoss
@@ -145,6 +146,7 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'mtp_loss': MTPLoss,
         'covernet_loss': CoverNetLoss,
         'min_ade_k': MinADEK,
+        'min_ade_loss': MinADE_loss,
         'min_fde_k': MinFDEK,
         'miss_rate_k': MissRateK,
         'pi_bc': PiBehaviorCloning,

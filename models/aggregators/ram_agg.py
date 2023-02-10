@@ -54,13 +54,13 @@ class RamAggregator(PredictionAggregator):
             self.mha1 = nn.MultiheadAttention(args['out_channels'], args['num_heads'])
         elif self.agg_type=='concat':
             self.deocde_block=nn.Sequential(
-                nn.Linear(2*args['emb_size']+2,args['emb_size']),
-                LayerNorm(args['emb_size']),
+                nn.Linear(2*args['out_channels']+2,args['out_channels']),
+                LayerNorm(args['out_channels']),
                 nn.LeakyReLU(),
-                nn.Linear(args['emb_size'],args['emb_size']//2),
-                LayerNorm(args['emb_size']//2),
+                nn.Linear(args['out_channels'],args['out_channels']//2),
+                LayerNorm(args['out_channels']//2),
                 nn.LeakyReLU(),
-                nn.Linear(args['emb_size']//2,1)
+                nn.Linear(args['out_channels']//2,1)
             )
 
         self.sampler = Sampler(args,resolution=args['resolution'],apply_mask=True)
@@ -74,9 +74,16 @@ class RamAggregator(PredictionAggregator):
             self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
                                 CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
         self.resolution=args['resolution']
+        self.W = int((args['map_extent'][1] - args['map_extent'][0])/self.resolution)
+        self.H = int((args['map_extent'][3] - args['map_extent'][2])/self.resolution)
         self.softmax=nn.Softmax(dim=-1)
         self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]).to(device))/self.resolution).int()
+        if self.agg_type=='concat':
+            self.source_row=round(0.8*self.conv_kernel)
+            self.center_row=round(0.5*self.conv_kernel)
 
+        
+        
     def forward(self, encodings: Dict) -> torch.Tensor:
         """
         Forward pass for attention aggregator
@@ -96,7 +103,7 @@ class RamAggregator(PredictionAggregator):
         context_encoding = context_encoding.permute(0, 2, 1)## [Batch number, H*W, channel]
 
         nodes_2D=self.sampler.sample_goals().repeat(context_encoding.shape[0],1,1).type(torch.float32)
-        
+        torch.cuda.empty_cache()
         query = self.query_emb(nodes_2D).permute(1,0,2)
         keys = self.key_emb(context_encoding).permute(1, 0, 2)
         vals = self.val_emb(context_encoding).permute(1, 0, 2)
@@ -108,28 +115,36 @@ class RamAggregator(PredictionAggregator):
             attn_output[torch.isnan(attn_output)]=0
         else:
             attn_output, _ = self.mha(query, keys, vals)
-        
+        torch.cuda.empty_cache()
         op = attn_output.permute(1,0,2)
         op = op.view(op.shape[0],self.sampler.H,self.sampler.W,-1)
         # op = torch.cat((target_agent_enc, op), dim=-1)
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
-        if self.agg_type=='attention':
-            # test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
-            aug_feat,attn_masks,init_states=self.pad_tensor(op.view(op.shape[0],op.shape[1],-1).permute(0,2,1),mask_map)
-            query1 = self.query_emb1(aug_feat).permute(1,0,2)
-            keys1 = self.key_emb1(aug_feat).permute(1,0,2)
-            vals1 = self.val_emb1(aug_feat).permute(1,0,2)
-            _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
-            attn_output_weights[torch.isnan(attn_output_weights)]=0
-            outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states,'feature': op, 'target_encodings':target_agent_enc}
-        elif self.agg_type=='concat':
-            source_feat,target_feat=self.get_unfolded_feature(op,map_mask)
-            x_coord,y_coord=torch.meshgrid(torch.arange(self.conv_kernel//2,-((self.conv_kernel//2)+1),-self.resolution),
-                                        torch.arange(-(self.conv_kernel//2),((self.conv_kernel//2)+1),self.resolution))
-            diff=torch.cat([x_coord.unsqueeze(0),y_coord.unsqueeze(0)],dim=0).to(op.device)
-            connectivities=self.concat_feat(source_feat,target_feat,diff)
-            outputs = {'node_connectivity': connectivities,'under_sampled_mask': mask_map}
+        torch.cuda.empty_cache()
+        if encodings['gt_traj'] is  not None:
+            outputs = {'node_connectivity': None,'under_sampled_mask': mask_map,'initial_states': None,'feature': op, 'target_encodings':target_agent_enc, 'gt_traj': encodings['gt_traj']}
+        else:
+            if self.agg_type=='attention':
+                # test_feat=op.view(op.shape[0],op.shape[1],-1).permute(0,2,1)
+                aug_feat,attn_masks,init_states=self.pad_tensor(op.view(op.shape[0],op.shape[1],-1).permute(0,2,1),mask_map)
+                query1 = self.query_emb1(aug_feat).permute(1,0,2)
+                keys1 = self.key_emb1(aug_feat).permute(1,0,2)
+                vals1 = self.val_emb1(aug_feat).permute(1,0,2)
+                _, attn_output_weights = self.mha1(query1, keys1, vals1, attn_mask=attn_masks)
+                torch.cuda.empty_cache()
+                attn_output_weights[torch.isnan(attn_output_weights)]=0
+                outputs = {'node_connectivity': attn_output_weights,'under_sampled_mask': mask_map,'initial_states': init_states,'feature': op, 'target_encodings':target_agent_enc}
+            elif self.agg_type=='concat':
+                source_feat,target_feat=self.get_unfolded_feature(op,mask_map)
+                x_coord,y_coord=torch.meshgrid(torch.arange((self.conv_kernel*self.resolution)//2+(self.source_row-self.center_row)*self.resolution,(self.source_row-self.center_row)*self.resolution-((self.conv_kernel*self.resolution)//2+self.resolution),-self.resolution),
+                                            torch.arange(-((self.conv_kernel*self.resolution)//2),((self.conv_kernel*self.resolution)//2+self.resolution),self.resolution))
+                diff=torch.cat([x_coord.unsqueeze(0),y_coord.unsqueeze(0)],dim=0).to(op.device)
+                connectivities=self.concat_feat(source_feat,target_feat,diff)
+                torch.cuda.empty_cache()
+
+                outputs = {'node_connectivity': connectivities,'under_sampled_mask': mask_map,'feature': op, 'target_encodings':target_agent_enc}
+                
         return outputs
 
     def get_unfolded_feature(self,feature,mask):
@@ -137,20 +152,25 @@ class RamAggregator(PredictionAggregator):
         kernel=self.conv_kernel
         channel=feature.shape[1]
         unfold = nn.Unfold(kernel_size=(kernel, kernel), dilation=1, padding=kernel//2, stride=(1, 1))
-        unfolded_feature=unfold(feature).permute(0,2,1) ## B,Number of slided window, channel*Number of elements in every window
+        unfolded_feature=unfold(feature).permute(0,2,1).view(feature.shape[0],self.H,self.W,-1)[:,:-(self.source_row-self.center_row)] 
+        unfolded_feature=unfolded_feature.view(unfolded_feature.shape[0],-1,unfolded_feature.shape[-1])## B,Number of slided window, channel*Number of elements in every window
+        # target_mask=mask.view(mask.shape[0],self.H,self.W)[:,:-(self.source_row-self.center_row)].view(mask.shape[0],-1)
         # unfolded_feature=unfolded_feature.view(unfolded_feature.shape[0],unfolded_feature.shape[1],channel,kernel**2)
-        current_node_feat=feature.view(feature.shape[0],channel,-1).permute(0,2,1)## B,Number of slided window, channel
+        current_node_feat=feature[:,:,(self.source_row-self.center_row):].view(feature.shape[0],channel,-1).permute(0,2,1)## B,Number of slided window, channel
+        source_mask=mask.view(mask.shape[0],self.H,self.W)[:,(self.source_row-self.center_row):].view(mask.shape[0],-1)
         # unfolded_feature=(unfolded_feature*mask.unsqueeze(-1)).to_sparse()
         # current_node_feat=(current_node_feat*mask.unsqueeze(-1)).to_sparse()
         target_feat=[]
         source_feat=[]
         for idx,batch in enumerate(current_node_feat):
-            source_feat.append(batch[mask[idx]])
-            target_feat.append(unfolded_feature[idx][mask[idx]])
+            source_feat.append(batch[source_mask[idx]])
+            target_feat.append(unfolded_feature[idx][source_mask[idx]])
+        torch.cuda.empty_cache()
         return source_feat,target_feat
 
     def concat_feat(self,source_feat,target_feat,diff):
-        diff=diff.unsqueeze(0).to(source_feat[0].device)
+        diff=diff.unsqueeze(0)
+        diff=diff.view(diff.shape[0],diff.shape[1],-1).permute(0,2,1)
         channel=source_feat[0].shape[-1]
         connectivities=[]
         for idx,batch in enumerate(source_feat):
@@ -159,6 +179,7 @@ class RamAggregator(PredictionAggregator):
             concat_feat=torch.cat((batch,target_batch,diff.repeat(batch.shape[0],1,1)),dim=-1)
             connectivity=self.softmax((self.deocde_block(concat_feat)).squeeze(-1))
             connectivities.append(connectivity)
+        torch.cuda.empty_cache()
         return connectivities
 
     @staticmethod
@@ -186,10 +207,16 @@ class RamAggregator(PredictionAggregator):
         device=feat.device
         attn_masks=[]
         image_batch = []
-        init_states=[]
-        init_pos=torch.zeros([self.sampler.H,self.sampler.W],device=device)
-        init_pos[self.compensation[0],self.compensation[1]]=1
+        init_states=[]        
         for i,batch in enumerate(feat):
+            init_pos=torch.zeros([self.sampler.H,self.sampler.W],device=device)
+            init_pos[self.compensation[0],self.compensation[1]]=1
+            if ((init_pos.view(-1))[mask[i]]).sum()<0.999:
+                # print('Before change',((init_pos.view(-1))[mask[i]]).sum())
+                mask_local=(mask[i].view(self.sampler.H,self.sampler.W))[self.compensation[0]-1:self.compensation[0]+1,self.compensation[1]-1:self.compensation[1]+1]
+                valid_node_num=mask_local.float().sum()
+                init_pos[self.compensation[0]-1:self.compensation[0]+1,self.compensation[1]-1:self.compensation[1]+1]=1/valid_node_num.item()
+                # print('After change',((init_pos.view(-1))[mask[i]]).sum())
             init_state=((init_pos.view(-1))[mask[i]]).to_sparse()
             aug_state=torch.cat((init_state, torch.sparse_coo_tensor(torch.empty([1,0]), [], [max_num - init_state.size(0),],device=device)), 0).unsqueeze(0)
             init_states.append(aug_state)

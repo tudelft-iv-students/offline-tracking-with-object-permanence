@@ -83,7 +83,7 @@ class HomeAggregator(PredictionAggregator):
         if self.concat:
             op = torch.cat([augmented_encoding, raster_map], dim=1)
 
-        outputs = {'agg_encoding': op,'under_sampled_mask': map_mask}
+        outputs = {'agg_encoding': op,'under_sampled_mask': map_mask,'target_encodings':target_agent_enc}
         return outputs
 
     @staticmethod
