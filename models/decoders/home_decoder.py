@@ -5,7 +5,7 @@ from typing import Dict, Union
 from models.decoders.ram_decoder import get_dense,get_index
 from return_device import return_device
 from models.library.sampler import TorchModalitySampler
-from models.library.blocks import LayerNorm
+from models.library.blocks import *
 device = return_device()
 
 
@@ -31,16 +31,15 @@ class HomeDecoder(PredictionDecoder):
         assert (args['agg_type'] == 'home_agg')
         self.resolution=args['resolution']
         # self.local_conc_range = int(args['conc_range']/self.resolution)
-        self.agg_channel = args['agg_channel']
-        self.layers=[]
-        for i in range(args['decoder_depth']-1):
-            self.layers.append(nn.Conv2d(self.agg_channel//(2**i), self.agg_channel//(2**(i+1)), kernel_size=1, stride=1, bias=False))
-            self.layers.append(nn.LeakyReLU())
-        assert (self.agg_channel//(2**(args['decoder_depth']-1))> args['heatmap_channel']-0.01)##Make sure the last layer has the least number of channels
-        self.layers.append(nn.Conv2d(self.agg_channel//(2**(args['decoder_depth']-1)), args['heatmap_channel'], kernel_size=1, stride=1, bias=False))
+        # self.layers=[]
+        # for i in range(args['decoder_depth']-1):
+        #     self.layers.append(nn.Conv2d(self.agg_channel//(2**i), self.agg_channel//(2**(i+1)), kernel_size=1, stride=1, bias=False))
+        #     self.layers.append(nn.LeakyReLU())
+        # assert (self.agg_channel//(2**(args['decoder_depth']-1))> args['heatmap_channel']-0.01)##Make sure the last layer has the least number of channels
+        # self.layers.append(nn.Conv2d(self.agg_channel//(2**(args['decoder_depth']-1)), args['heatmap_channel'], kernel_size=1, stride=1, bias=False))
         # self.layers.append(nn.LeakyReLU())
-        self.decoding_net=nn.ModuleList(self.layers)
-        self.sigmoid=nn.Sigmoid()
+        self.teacher_force=False
+        
         self.map_extent = args['map_extent']
         self.horizon=args['heatmap_channel']
         self.resolution=args['resolution']
@@ -49,17 +48,24 @@ class HomeDecoder(PredictionDecoder):
         self.compensation=torch.round((torch.Tensor([args['map_extent'][3],-args['map_extent'][0]]))/self.resolution).int()
         self.output_traj = args['output_traj']
         self.pretrain_mlp = args['pretrain_mlp']
+        self.decoding_net=nn.Sequential(
+            TransposeCNNBlock(in_channels=512, out_channels=256, kernel_size=3, stride=2, padding=1, output_padding=0),
+            TransposeCNNBlock(in_channels=256, out_channels=128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            TransposeCNNBlock(in_channels=128, out_channels=64, kernel_size=3, stride=2, padding=1, output_padding=0),
+            TransposeCNNBlock(in_channels=64, out_channels=32, kernel_size=3, stride=2, output_padding=1),
+            AddCoords(with_r=False),
+            nn.Conv2d(in_channels=34, out_channels=1, kernel_size=3, stride=1, padding=1,padding_mode='replicate'),
+            nn.Sigmoid()
+        )
+
         if self.output_traj:
             self.diff_emb=args['diff_emb']
-            self.feature_dim=args['target_agent_enc_size']+args['agg_channel']+self.diff_emb
+            self.feature_dim=args['target_agent_enc_size']+self.diff_emb
             self.num_target=args['num_target']
             self.endpoint_sampler=TorchModalitySampler(args['num_target'],args['sample_radius'])
             self.diff_encoder=nn.Linear(2,self.diff_emb)
-            self.decoder = nn.Sequential(nn.Linear(self.feature_dim,self.feature_dim//2),
-                                        LayerNorm(self.feature_dim//2),
-                                        nn.ReLU(),
-                                        nn.Linear(self.feature_dim//2,self.horizon*2))
-
+            self.decoder = Home_attn_deocder(args['emb_size'],args['num_heads'],input_dim_context=args['map_dim'],
+                                            input_dim_traj=self.feature_dim,horizon=self.horizon)
         
 
     def forward(self, inputs: Union[Dict, torch.Tensor]) -> Dict:
@@ -76,53 +82,94 @@ class HomeDecoder(PredictionDecoder):
         else:
             agg_encoding = inputs['agg_encoding']
             if 'under_sampled_mask' in inputs:
-                mask=inputs['under_sampled_mask'].to(device)
+                mask=inputs['under_sampled_mask']
             else:
                 mask=None
+            
         if self.output_traj:
-                target_encodings = inputs['target_encodings']
+            target_encodings = inputs['target_encodings']
+        if 'traj_feature' in inputs:
+            target_encodings = inputs['traj_feature']
 
 
-        x=agg_encoding
-        for i,layer in enumerate(self.decoding_net):
-            x=layer(x)
-        predictions=self.sigmoid(x)
         if self.pretrain_mlp:
-            map_feature=agg_encoding.permute(0,2,3,1)
+            map_feature=agg_encoding.flatten(2).permute(2,0,1)
             gt_traj=inputs['gt_traj']
-            final_points=gt_traj[:,-1].unsqueeze(1)
-            swapped=torch.zeros_like(final_points,device=gt_traj.device)
-            swapped[:,:,0],swapped[:,:,1]=-final_points[:,:,1],final_points[:,:,0]
-            endpoints=torch.round(swapped/self.resolution+self.compensation.to(swapped.device)).long()
-            concat_feature=torch.empty([0,1,self.feature_dim],device=map_feature.device)
-            for batch_idx in range(len(gt_traj)):
-                map_feat = (map_feature[batch_idx])[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]
-                diff = final_points[batch_idx]
-                # diff = (endpoints[batch_idx]-self.compensation.to(device))*self.resolution
-                # diff[:.0] = -diff[:.0]
-                feature=torch.cat([map_feat,self.diff_encoder(diff),target_encodings[batch_idx].unsqueeze(0)],dim=-1).unsqueeze(0)
-                concat_feature=torch.cat([concat_feature,feature],dim=0)
-            trajectories=self.decoder(concat_feature).view(gt_traj.shape[0],1,self.horizon,2)
+            final_points=gt_traj[:,-1]
+            swapped=torch.zeros_like(final_points,device=device)
+            swapped[:,0],swapped[:,1]=-final_points[:,1],final_points[:,0]
+            endpoints=torch.round(swapped/self.resolution+self.compensation.to(device)).long()
+            concat_feature=torch.cat([self.diff_encoder(final_points),target_encodings],dim=-1).unsqueeze(1)
+            trajectories=self.decoder(concat_feature,map_feature).view(gt_traj.shape[0],1,self.horizon,2)
             torch.cuda.empty_cache()
             return {'pred': None,'mask': mask,'traj': trajectories,'probs':torch.ones([trajectories.shape[0],1],device=device),'endpoints':endpoints}
+        
+        predictions=self.decoding_net(agg_encoding)
+        
+        if self.teacher_force:
+            map_feature=agg_encoding.flatten(2).permute(2,0,1)
+            gt_traj=inputs['gt_traj']
+            final_points=gt_traj[:,-1]
+            swapped=torch.zeros_like(final_points,device=device)
+            swapped[:,0],swapped[:,1]=-final_points[:,1],final_points[:,0]
+            endpoints=torch.round(swapped/self.resolution+self.compensation.to(device)).long()
+            concat_feature=torch.cat([self.diff_encoder(final_points),target_encodings],dim=-1).unsqueeze(1)
+            trajectories=self.decoder(concat_feature,map_feature).view(gt_traj.shape[0],1,self.horizon,2)
+            torch.cuda.empty_cache()
+            return {'pred': predictions,'mask': mask,'traj': trajectories,'probs':torch.ones([trajectories.shape[0],1],device=device),'endpoints':endpoints}
         if self.output_traj:
-            map_feature=agg_encoding.permute(0,2,3,1)
+            map_feature=agg_encoding.flatten(2).permute(2,0,1)
             # nodes_2D=get_index(predictions[:,-1].unsqueeze(1),mask,self.H,self.W)
             dense_pred=predictions[:,-1].unsqueeze(1)
             endpoints,confidences = self.endpoint_sampler(dense_pred)
             endpoints=endpoints.long()
             concat_feature=torch.empty([0,self.num_target,self.feature_dim],device=predictions.device)
-            x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[-1],self.map_extent[-2],-self.resolution), ##### SHould be changed when image size changes
-                                            torch.arange(self.map_extent[0],self.map_extent[1],self.resolution))
-            indices=torch.cat([x_coord.unsqueeze(-1),y_coord.unsqueeze(-1)],dim=-1).to(predictions.device)
+            x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[-1],self.map_extent[-2],-self.resolution)-self.resolution/2, ##### SHould be changed when image size changes
+                                            torch.arange(self.map_extent[0],self.map_extent[1],self.resolution)+self.resolution/2)
+            indices=torch.cat([y_coord.unsqueeze(-1),x_coord.unsqueeze(-1)],dim=-1).to(predictions.device)
             for batch_idx in range(len(dense_pred)):
-                map_feat = (map_feature[batch_idx])[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]
+                # map_feat = (map_feature[batch_idx])[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]
                 diff = (indices[endpoints[batch_idx,:,0],endpoints[batch_idx,:,1]]).float()
-                # diff = (endpoints[batch_idx]-self.compensation.to(device))*self.resolution
-                # diff[:.0] = -diff[:.0]
-                feature=torch.cat([map_feat,self.diff_encoder(diff),target_encodings[batch_idx].repeat(self.endpoint_sampler._n_targets,1)],dim=-1).unsqueeze(0)
+                feature=torch.cat([self.diff_encoder(diff),target_encodings[batch_idx].repeat(self.endpoint_sampler._n_targets,1)],dim=-1).unsqueeze(0)
                 concat_feature=torch.cat([concat_feature,feature],dim=0)
-            trajectories=self.decoder(concat_feature).view(dense_pred.shape[0],self.num_target,self.horizon,2)
+            trajectories=self.decoder(concat_feature,map_feature).view(dense_pred.shape[0],self.num_target,self.horizon,2)
             torch.cuda.empty_cache()
             return {'pred': predictions,'mask': mask,'traj': trajectories,'probs':confidences,'endpoints':endpoints}
         return {'pred': predictions,'mask': mask}
+
+class Home_attn_deocder(nn.Module):
+    def __init__(self, emb_size, num_heads,input_dim_context,input_dim_traj,horizon):
+        super(Home_attn_deocder, self).__init__()
+        self.attention=nn.MultiheadAttention(emb_size, num_heads)
+        self.query_embedder=leaky_MLP(input_dim_traj,emb_size)
+        self.key_embedder=leaky_MLP(input_dim_context,emb_size)
+        self.value_embedder=leaky_MLP(input_dim_context,emb_size)
+        self.decode_head=nn.Sequential(leaky_MLP(emb_size+input_dim_traj,(emb_size+input_dim_traj)//2),
+                                        nn.Linear((emb_size+input_dim_traj)//2,horizon*2))
+
+    def forward(self,traj_emb,context_emb):
+        traj_query=self.query_embedder(traj_emb.transpose(0,1))
+        context_key=self.key_embedder(context_emb)
+        context_value=self.value_embedder(context_emb)
+        attn_output,_=self.attention(query=traj_query, key=context_key, value=context_value, need_weights=False)
+        traj_enc = torch.cat((attn_output.transpose(0,1), traj_emb),dim=-1)
+        trajs=self.decode_head(traj_enc)
+        return trajs
+
+# class Home_MLP_deocder(nn.Module):
+#     def __init__(self, in_features,trajectory_hist_length,emb_size=32,horizon=12):
+#         super(Home_MLP_deocder, self).__init__()
+#         self.traj_encoder=nn.Sequential(
+#             nn.Flatten(1),
+#             leaky_MLP(in_features*trajectory_hist_length, emb_size)
+#         )
+#         self.traj_decoder=nn.Sequential(
+#             leaky_MLP(emb_size+2,64),
+#             nn.Linear(64,horizon*2)
+#         )
+
+#     def forward(self,traj_hist,diff):
+#         traj_emb=self.traj_encoder(traj_hist)
+#         x=torch.cat((traj_emb,diff),-1)
+#         trajs=self.traj_decoder(x)
+#         return trajs

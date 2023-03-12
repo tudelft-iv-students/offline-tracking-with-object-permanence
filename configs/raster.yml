@@ -23,9 +23,9 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 8
+batch_size: 12
 num_workers: 6
-
+nrow: 3
 
 
 
@@ -106,12 +106,12 @@ decoder_args:
 # Optimizer parameters
 optim_args:
   lr: 0.001
-  scheduler_step: 4
+  scheduler_step: 2
   scheduler_gamma: 0.5
 
 # Full parameters
 losses: ['focal_loss','min_ade_loss','drivable_loss']
-loss_weights: [0.2,0.001,0.01]
+loss_weights: [0.4,0.1,1.0]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -120,12 +120,13 @@ loss_args:
     horizon: 12
     type: 'sum'
     reduce_map: False
+    normalize: False
   - dummy: 0
   - type: 'sum'
 
 
 
-tr_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_fde_k']
+tr_metrics: ['focal_loss','min_ade_k', 'min_ade_loss', 'miss_rate_k','min_fde_k','drivable_loss']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -134,10 +135,13 @@ tr_metric_args:
     horizon: 12
     type: 'sum'
     reduce_map: False
+    normalize: False
   - k: 10
+  - dummy: 0
   - k: 10
     dist_thresh: 2
   - k: 10
+  - type: 'sum'
 
 
 val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k' , 'min_fde_k']
@@ -149,6 +153,7 @@ val_metric_args:
     horizon: 12
     type: 'sum'
     reduce_map: False
+    normalize: False
   - k: 10
   - k: 10
     dist_thresh: 2

@@ -27,7 +27,7 @@ def send_to_device(data: Union[Dict, torch.Tensor]):
     Utility function to send nested dictionary with Tensors to GPU
     """
     if type(data) is torch.Tensor:
-        return data.to(device)
+        return data.to(device).clone().detach()
     elif type(data) is dict:
         for k, v in data.items():
             data[k] = send_to_device(v)

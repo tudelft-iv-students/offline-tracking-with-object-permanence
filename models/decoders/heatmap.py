@@ -83,11 +83,7 @@ class HTMAP(PredictionDecoder):
         if self.output_traj:
                 target_encodings = inputs['target_encodings']
 
-        x=agg_encoding
-        for i,layer in enumerate(self.decoding_net):
-            x=layer(x)
-        predictions=x.view(x.shape[0],x.shape[1],-1)
-        predictions=self.softmax(predictions).view(x.shape)
+        
         if self.pretrain_mlp:
             map_feature=agg_encoding.permute(0,2,3,1)
             gt_traj=inputs['gt_traj']
@@ -106,6 +102,14 @@ class HTMAP(PredictionDecoder):
             trajectories=self.decoder(concat_feature).view(gt_traj.shape[0],1,self.horizon,2)
             torch.cuda.empty_cache()
             return {'pred': None,'mask': mask,'traj': trajectories,'probs':torch.ones([trajectories.shape[0],1],device=device),'endpoints':endpoints}
+        
+        
+        x=agg_encoding
+        for i,layer in enumerate(self.decoding_net):
+            x=layer(x)
+        predictions=x.view(x.shape[0],x.shape[1],-1)
+        predictions=self.softmax(predictions).view(x.shape)
+        
         if self.output_traj:
             map_feature=agg_encoding.permute(0,2,3,1)
             # nodes_2D=get_index(predictions[:,-1].unsqueeze(1),mask,self.H,self.W)

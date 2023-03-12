@@ -53,6 +53,10 @@ class Evaluator:
         # Initialize metrics
         self.metrics = [initialize_metric(cfg['val_metrics'][i], cfg['val_metric_args'][i])
                         for i in range(len(cfg['val_metrics']))]
+        self.model.aggregator.teacher_force = False
+        self.model.decoder.teacher_force = False
+        self.teacher_force = False
+        self.model.decoder.pretrain_mlp = False
 
     def evaluate(self, output_dir: str):
         """
@@ -68,7 +72,7 @@ class Evaluator:
 
                 # Load data
                 data = u.send_to_device(u.convert_double_to_float(data))
-
+                data['inputs']['gt_traj']= None
                 # Forward pass
                 predictions = self.model(data['inputs'])
 

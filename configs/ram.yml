@@ -23,8 +23,9 @@ test_set_args:
   split: 'val'
   random_flips: False
 
-batch_size: 1
-num_workers: 6
+batch_size: 4
+num_workers: 4
+nrow: 2
 
 
 
@@ -44,17 +45,17 @@ encoder_args:
 aggregator_type: 'ram'
 aggregator_args:
   pre_train: False
-  agg_type: 'concat'
+  agg_type: 'global'
   backbone: 'resnet18'
   target_agent_enc_size: 32
   map_extent: [-61, 61, -22, 100]
   context_enc_size: 512
   img_size: [488,488]
-  resolution: 0.5
+  resolution: 1
   emb_size: 128
   num_heads: 2
   convolute: True
-  conv_kernel_ratio: 0.10
+  conv_kernel_ratio: 0.15
   out_channels: 48
 
 # aggregator_type: 'home_agg'
@@ -76,20 +77,21 @@ aggregator_args:
 # Decoder parameters
 decoder_type: 'ram_decoder'
 decoder_args:
-  agg_type: 'concat'
+  agg_type: 'global'
   conc_range: 18
   map_extent: [-61, 61, -22, 100]
-  resolution: 0.5
+  resolution: 1
   agg_channel: 48 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
   decoder_depth: 3
   heatmap_channel: 12
   output_traj: True
   num_target: 20
-  sample_radius: 3
+  sample_radius: 1
   target_agent_enc_size: 32
   emb_size: 128
   diff_emb: 10
   pretrain_mlp: False
+  apply_softmax: False
 
 # decoder_type: 'home'
 # decoder_args:
@@ -106,35 +108,38 @@ decoder_args:
 # Optimizer parameters
 optim_args:
   lr: 0.001
-  scheduler_step: 4
-  scheduler_gamma: 0.5
+  scheduler_step: 3
+  scheduler_gamma: 0.8
 
 # Full parameters
 losses: ['focal_loss','min_ade_loss']
-loss_weights: [0.2,0.001]
+loss_weights: [1.0,0.2]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
-    resolution: 0.5
+    resolution: 1
     window_size: 5
     horizon: 12
     type: 'sum'
     reduce_map: True
+    normalize: False
   - dummy: 0
   - type: 'sum'
 
 
 
-tr_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_fde_k']
+tr_metrics: ['focal_loss','min_ade_k','min_ade_loss', 'miss_rate_k','min_fde_k']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
-    resolution: 0.5
+    resolution: 1
     window_size: 5
     horizon: 12
     type: 'sum'
     reduce_map: True
+    normalize: False
   - k: 10
+  - dummy: 0
   - k: 10
     dist_thresh: 2
   - k: 10
@@ -144,11 +149,12 @@ val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k'
 val_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
-    resolution: 0.5
+    resolution: 1
     window_size: 5
     horizon: 12
     type: 'sum'
     reduce_map: True
+    normalize: False
   - k: 10
   - k: 10
     dist_thresh: 2

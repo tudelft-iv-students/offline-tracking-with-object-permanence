@@ -1,6 +1,8 @@
 from datasets.nuScenes.nuScenes import NuScenesTrajectories
 from nuscenes.prediction.input_representation.static_layers import correct_yaw
 from nuscenes.map_expansion.map_api import NuScenesMap
+from nuscenes.prediction.input_representation.static_layers import StaticLayerRasterizer
+from nuscenes.prediction.input_representation.agents import AgentBoxesWithFadedHistory
 from nuscenes.eval.common.utils import quaternion_yaw
 from pyquaternion import Quaternion
 from nuscenes.prediction import PredictHelper
@@ -36,11 +38,33 @@ class NuScenesVector(NuScenesTrajectories):
         self.map_extent = args['map_extent']
         self.polyline_resolution = args['polyline_resolution']
         self.polyline_length = args['polyline_length']
+        self.use_home=args['use_home']
+        self.use_raster=args['use_raster']
+        if self.use_raster:
+            self.img_size = args['img_size']
+            self.map_extent = args['map_extent']
+
+            # Raster map with agent boxes
+            resolution = (self.map_extent[1] - self.map_extent[0]) / self. img_size[1]
+            self.map_rasterizer = StaticLayerRasterizer(self.helper,
+                                                        resolution=resolution,
+                                                        meters_ahead=self.map_extent[3],
+                                                        meters_behind=-self.map_extent[2],
+                                                        meters_left=-self.map_extent[0],
+                                                        meters_right=self.map_extent[1])
+
+            self.agent_rasterizer = AgentBoxesWithFadedHistory(self.helper, seconds_of_history=self.t_h,
+                                                            resolution=resolution,
+                                                            meters_ahead=self.map_extent[3],
+                                                            meters_behind=-self.map_extent[2],
+                                                            meters_left=-self.map_extent[0],
+                                                            meters_right=self.map_extent[1])
 
         # Load dataset stats (max nodes, max agents etc.)
         if self.mode == 'extract_data':
             stats = self.load_stats()
-            self.max_nodes = stats['num_lane_nodes']
+            if not self.use_raster:
+                self.max_nodes = stats['num_lane_nodes']
             self.max_vehicles = stats['num_vehicles']
             self.max_pedestrians = stats['num_pedestrians']
 
@@ -52,13 +76,20 @@ class NuScenesVector(NuScenesTrajectories):
         """
         Function to compute statistics for a given data point
         """
-        num_lane_nodes = self.get_map_representation(idx)
+        
         num_vehicles, num_pedestrians = self.get_surrounding_agent_representation(idx)
-        stats = {
-            'num_lane_nodes': num_lane_nodes,
-            'num_vehicles': num_vehicles,
-            'num_pedestrians': num_pedestrians
-        }
+        if self.use_raster:
+            stats = {
+                'num_vehicles': num_vehicles,
+                'num_pedestrians': num_pedestrians
+            }
+        else:
+            num_lane_nodes = self.get_map_representation(idx)
+            stats = {
+                'num_lane_nodes': num_lane_nodes,
+                'num_vehicles': num_vehicles,
+                'num_pedestrians': num_pedestrians
+            }
 
         return stats
 
@@ -87,15 +118,23 @@ class NuScenesVector(NuScenesTrajectories):
 
         # Zero pad for track histories shorter than t_h
         hist_zeropadded = np.zeros((int(self.t_h) * 2 + 1, 2))
-
+        if self.use_home:
+            time_seq = np.arange(int(self.t_h) * 2,-1,-1).reshape([int(self.t_h) * 2 + 1,1])*0.5
+            mask_array = np.ones((int(self.t_h) * 2 + 1, 1))
         # Flip to have correct order of timestamps
         hist = np.flip(hist, 0)
         hist_zeropadded[-hist.shape[0]-1: -1] = hist
+        if self.use_home:
+            time_seq[:-hist.shape[0]-1]=0
+            mask_array[-hist.shape[0]-1:] = 0
         hist = hist_zeropadded
 
         # Get velocity, acc and yaw_rate over past t_h sec
         motion_states = self.get_past_motion_states(i_t, s_t)
-        hist = np.concatenate((hist, motion_states), axis=1)
+        if self.use_home:
+            hist = np.concatenate((hist, motion_states,mask_array,time_seq), axis=1)
+        else:
+            hist = np.concatenate((hist, motion_states), axis=1)
 
         return hist
 
@@ -107,41 +146,48 @@ class NuScenesVector(NuScenesTrajectories):
             masks of the same shape, with value 1 if the nodes/poses are empty,
         """
         i_t, s_t = self.token_list[idx].split("_")
-        map_name = self.helper.get_map_name_from_sample_token(s_t)
-        map_api = self.maps[map_name]
+        if self.use_raster:
+            img,mask = self.map_rasterizer.make_representation_with_mask(i_t, s_t)
+            img = np.moveaxis(img, -1, 0)
+            img = img.astype(float) / 255
+            return {'image':img,'mask':mask}
 
-        # Get agent representation in global co-ordinates
-        global_pose = self.get_target_agent_global_pose(idx)
+        else:
+            map_name = self.helper.get_map_name_from_sample_token(s_t)
+            map_api = self.maps[map_name]
 
-        # Get lanes around agent within map_extent
-        lanes = self.get_lanes_around_agent(global_pose, map_api)
+            # Get agent representation in global co-ordinates
+            global_pose = self.get_target_agent_global_pose(idx)
 
-        # Get relevant polygon layers from the map_api
-        polygons = self.get_polygons_around_agent(global_pose, map_api)
+            # Get lanes around agent within map_extent
+            lanes = self.get_lanes_around_agent(global_pose, map_api)
 
-        # Get vectorized representation of lanes
-        lane_node_feats, _ = self.get_lane_node_feats(global_pose, lanes, polygons)
+            # Get relevant polygon layers from the map_api
+            polygons = self.get_polygons_around_agent(global_pose, map_api)
 
-        # Discard lanes outside map extent
-        lane_node_feats = self.discard_poses_outside_extent(lane_node_feats)
+            # Get vectorized representation of lanes
+            lane_node_feats, _ = self.get_lane_node_feats(global_pose, lanes, polygons)
 
-        # Add dummy node (0, 0, 0, 0, 0) if no lane nodes are found
-        if len(lane_node_feats) == 0:
-            lane_node_feats = [np.zeros((1, 5))]
+            # Discard lanes outside map extent
+            lane_node_feats = self.discard_poses_outside_extent(lane_node_feats)
 
-        # While running the dataset class in 'compute_stats' mode:
-        if self.mode == 'compute_stats':
-            return len(lane_node_feats)
+            # Add dummy node (0, 0, 0, 0, 0) if no lane nodes are found
+            if len(lane_node_feats) == 0:
+                lane_node_feats = [np.zeros((1, 5))]
 
-        # Convert list of lane node feats to fixed size numpy array and masks
-        lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 5)
+            # While running the dataset class in 'compute_stats' mode:
+            if self.mode == 'compute_stats':
+                return len(lane_node_feats)
 
-        map_representation = {
-            'lane_node_feats': lane_node_feats,
-            'lane_node_masks': lane_node_masks
-        }
+            # Convert list of lane node feats to fixed size numpy array and masks
+            lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 5)
 
-        return map_representation
+            map_representation = {
+                'lane_node_feats': lane_node_feats,
+                'lane_node_masks': lane_node_masks
+            }
+
+            return map_representation
 
     def get_surrounding_agent_representation(self, idx: int) -> \
             Union[Tuple[int, int], Dict]:
@@ -152,6 +198,7 @@ class NuScenesVector(NuScenesTrajectories):
         """
 
         # Get vehicles and pedestrian histories for current sample
+        
         vehicles = self.get_agents_of_type(idx, 'vehicle')
         pedestrians = self.get_agents_of_type(idx, 'human')
 
@@ -164,15 +211,30 @@ class NuScenesVector(NuScenesTrajectories):
             return len(vehicles), len(pedestrians)
 
         # Convert to fixed size arrays for batching
-        vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.max_vehicles, self.t_h * 2 + 1, 5)
-        pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, self.t_h * 2 + 1, 5)
+        if self.use_home:
+            vehicles = self.list_to_tensor(vehicles, self.max_vehicles, self.t_h * 2 + 1, 5,True)
+            pedestrians = self.list_to_tensor(pedestrians, self.max_pedestrians, self.t_h * 2 + 1, 5,True)
 
-        surrounding_agent_representation = {
-            'vehicles': vehicles,
-            'vehicle_masks': vehicle_masks,
-            'pedestrians': pedestrians,
-            'pedestrian_masks': pedestrian_masks
-        }
+            surrounding_agent_representation = {
+                'vehicles': vehicles,
+                'pedestrians': pedestrians
+            }
+        else:
+            vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.max_vehicles, self.t_h * 2 + 1, 5,False)
+            pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, self.t_h * 2 + 1, 5,False)
+
+            surrounding_agent_representation = {
+                'vehicles': vehicles,
+                'vehicle_masks': vehicle_masks,
+                'pedestrians': pedestrians,
+                'pedestrian_masks': pedestrian_masks
+            }
+        if self.use_raster:
+            i_t, s_t = self.token_list[idx].split("_")
+            img = self.agent_rasterizer.make_representation(i_t, s_t)
+            img = np.moveaxis(img, -1, 0)
+            img = img.astype(float) / 255
+        surrounding_agent_representation['image']=img
 
         return surrounding_agent_representation
 
@@ -437,7 +499,7 @@ class NuScenesVector(NuScenesTrajectories):
 
     @staticmethod
     def list_to_tensor(feat_list: List[np.ndarray], max_num: int, max_len: int,
-                       feat_size: int) -> Tuple[np.ndarray, np.ndarray]:
+                       feat_size: int,use_home: bool) -> Tuple[np.ndarray, np.ndarray]:
         """
         Converts a list of sequential features (e.g. lane polylines or agent history) to fixed size numpy arrays for
         forming mini-batches
@@ -450,12 +512,22 @@ class NuScenesVector(NuScenesTrajectories):
             2) ndarray of binary masks of shape [max_num, max_len, feat_dim]. Has ones where elements are missing.
         """
         feat_array = np.zeros((max_num, max_len, feat_size))
-        mask_array = np.ones((max_num, max_len, feat_size))
-        for n, feats in enumerate(feat_list):
-            feat_array[n, :len(feats), :] = feats
-            mask_array[n, :len(feats), :] = 0
+        if use_home:
+            mask_array = np.ones((max_num, max_len, 1))
+            time_seq = np.tile((np.arange(max_len-1,-1,-1).reshape([max_len,1])*0.5),[max_num,1,1])
+            for n, feats in enumerate(feat_list):
+                feat_array[n, :len(feats), :] = feats
+                mask_array[n, :len(feats), :] = 0
+                time_seq[n, len(feats):, :] = 0
+            time_seq[len(feat_list):] = 0
+            return np.concatenate((feat_array,mask_array,time_seq),axis=-1)
+        else:
+            mask_array = np.ones((max_num, max_len, feat_size))
+            for n, feats in enumerate(feat_list):
+                feat_array[n, :len(feats), :] = feats
+                mask_array[n, :len(feats), :] = 0
 
-        return feat_array, mask_array
+            return feat_array, mask_array
 
     @staticmethod
     def flip_horizontal(data: Dict):

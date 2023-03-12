@@ -44,13 +44,15 @@ class TorchModalitySampler(nn.Module):
             for _ in range(self._n_targets):
                 agg = self._avgpool(hm[batch_index])[0]
                 agg_max = torch.max(agg)
+                # print(agg_max)
                 coords = torch.nonzero((agg == agg_max))[0]
                 max_val=torch.max(hm[batch_index, 0, coords[0]:coords[0]+self._reclen, coords[1]:coords[1]+self._reclen])
                 coords_hm  = torch.nonzero((hm[batch_index, 0] == max_val))[0]
+                confidences.append(hm[batch_index, 0, coords[0]:coords[0]+self._reclen, coords[1]:coords[1]+self._reclen].sum().detach().item())
                 hm[batch_index, 0, coords[0]:coords[0]+self._reclen, coords[1]:coords[1]+self._reclen] = 0.0
                 
                 end_points.append((coords_hm) / self._upscale)
-                confidences.append(agg_max.detach().item()*self._square)
+                # confidences.append(agg_max.detach().item()*self._square)
 
             end_points = torch.stack(end_points)
             confidences = torch.tensor(confidences, dtype=torch.float32)

@@ -54,12 +54,12 @@ class NuScenesTrajectories(SingleAgentDataset):
         :return inputs: Dictionary with input representations
         """
         i_t, s_t = self.token_list[idx].split("_")
-        map_representation,mask = self.get_map_representation(idx)
+        map_representation = self.get_map_representation(idx)
         surrounding_agent_representation = self.get_surrounding_agent_representation(idx)
         target_agent_representation = self.get_target_agent_representation(idx)
         inputs = {'instance_token': i_t,
                   'sample_token': s_t,
-                  'map_representation': [map_representation,mask],
+                  'map_representation': map_representation,
                   'surrounding_agent_representation': surrounding_agent_representation,
                   'target_agent_representation': target_agent_representation}
         return inputs

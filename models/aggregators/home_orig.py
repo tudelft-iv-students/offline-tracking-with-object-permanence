@@ -4,7 +4,7 @@ from models.aggregators.aggregator import PredictionAggregator
 from models.library.blocks import *
 # from models.library.RasterSampler import *
 from typing import Dict, Tuple
-from models.library.blocks import CNNBlock,TransposeCNNBlock
+# from models.library.blocks import TransposeCNNBlock
 
 
 class HomeAggregator(PredictionAggregator):
@@ -31,34 +31,16 @@ class HomeAggregator(PredictionAggregator):
             raise RuntimeError("The encoder should be a raster encoder!")
         interm_channel=int((input_channel+args['context_enc_size'])/2)
         self.dim_reduction_block=nn.Sequential(
-            nn.Conv2d(input_channel, interm_channel, kernel_size=1, stride=1, bias=False),
+            nn.Conv2d(input_channel, interm_channel, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
             nn.BatchNorm2d(interm_channel),
             nn.ReLU(),
-            nn.Conv2d(interm_channel, args['context_enc_size'], kernel_size=1, stride=1, bias=False),
+            nn.Conv2d(interm_channel, args['context_enc_size'], kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
             nn.BatchNorm2d(args['context_enc_size']),
             nn.ReLU()
         )
-        # self.query_emb = nn.Linear(2, args['emb_size'])
-        # self.key_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
-        # self.val_emb = nn.Linear(args['context_enc_size'], args['emb_size'])
-        # self.mha = nn.MultiheadAttention(args['emb_size'], args['num_heads'])
-        # self.sampler = Sampler(args,resolution=args['resolution'])
-        # self.num_heads = args['num_heads']
-        # self.conv = args['convolute']
-        # if self.conv:
-        #     self.conv_kernel=int(args['conv_kernel_ratio']*self.sampler.H)
-        #     if self.conv_kernel % 2 ==0:
-        #         self.conv_kernel+=1
-        #     interm_channel=int((args['out_channels']+args['emb_size'])/2)
-        #     self.final_convs = nn.Sequential(CNNBlock(in_channels=args['emb_size'], out_channels=interm_channel, kernel_size=self.conv_kernel,padding=self.conv_kernel//2),
-        #                         CNNBlock(in_channels=interm_channel, out_channels=args['out_channels'], kernel_size=self.conv_kernel,padding=self.conv_kernel//2))
-        self.transpose_conv=nn.Sequential(
-            TransposeCNNBlock(in_channels=args['context_enc_size'], out_channels=256, kernel_size=3, stride=2, padding=1, output_padding=0),
-            TransposeCNNBlock(in_channels=256, out_channels=128, kernel_size=3, stride=2, padding=1, output_padding=0),
-            TransposeCNNBlock(in_channels=128, out_channels=64, kernel_size=3, stride=2, padding=1, output_padding=0),
-            TransposeCNNBlock(in_channels=64, out_channels=32, kernel_size=3, stride=2, output_padding=1),
-            TransposeCNNBlock(in_channels=32, out_channels=26, kernel_size=3, stride=2, padding=1, output_padding=1)
-        )
+        self.concat=False
+
+        
 
     def forward(self, encodings: Dict) -> torch.Tensor:
         """
@@ -69,21 +51,25 @@ class HomeAggregator(PredictionAggregator):
         context_enc = encodings['context_encoding']
         if context_enc['combined'] is not None:
             combined_enc, map_mask = context_enc['combined'], context_enc['map_masks'].bool()
+            if context_enc['traj_feature'] is not None:
+                traj_feat=context_enc['traj_feature']
             if context_enc['map'] is not None:
                 raster_map=context_enc['map']
                 self.concat=True
         else:
             combined_enc, _ = self.get_combined_encodings(context_enc)
-            self.concat=False
+            
 
         augmented_target_agent_enc = target_agent_enc.unsqueeze(2).unsqueeze(3).repeat(1,1,combined_enc.shape[-2],combined_enc.shape[-1])
         concatenated_encodings=torch.cat([combined_enc,augmented_target_agent_enc],dim=1)
-        context_encoding = self.dim_reduction_block(concatenated_encodings)##Fuse agent feat with map feat by compressing the dimension (actually is linear layer)
-        augmented_encoding = self.transpose_conv(context_encoding)
+        op = self.dim_reduction_block(concatenated_encodings)##Fuse agent feat with map feat by compressing the dimension (actually is linear layer)
         if self.concat:
-            op = torch.cat([augmented_encoding, raster_map], dim=1)
+            op = torch.cat([op, raster_map], dim=1)
 
-        outputs = {'agg_encoding': op,'under_sampled_mask': map_mask,'target_encodings':target_agent_enc}
+        outputs = {'agg_encoding': op,'under_sampled_mask': map_mask,'target_encodings':target_agent_enc,'traj_feature':traj_feat}
+        torch.cuda.empty_cache()
+        if encodings['gt_traj'] is not None:
+            outputs['gt_traj']= encodings['gt_traj']
         return outputs
 
     @staticmethod

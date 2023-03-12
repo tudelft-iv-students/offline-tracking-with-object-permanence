@@ -78,7 +78,7 @@ class NuScenesRaster(NuScenesTrajectories):
         img,mask = self.map_rasterizer.make_representation_with_mask(i_t, s_t)
         img = np.moveaxis(img, -1, 0)
         img = img.astype(float) / 255
-        return img,mask
+        return {'image':img,'mask':mask}
 
     def get_surrounding_agent_representation(self, idx: int) -> np.ndarray:
         """

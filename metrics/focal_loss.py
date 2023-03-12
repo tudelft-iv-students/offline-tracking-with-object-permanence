@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from return_device import return_device
 device = return_device()
 
-def gaussian(window_size, sigma=0.8):
+def gaussian(window_size, sigma=4.0):
     gauss = torch.Tensor([exp(-(x - window_size//2)**2/float(2*sigma**2)) for x in range(window_size)])
     return gauss#/gauss.sum()
 def create_window(window_size, channel):
@@ -33,11 +33,17 @@ class FocalLoss(Metric):
         # self.compensation=torch.tensor([98,59]).to(device)
         self.gassian_blur=args['gauss_blur']
         self.horizon=args['horizon']
-        self.window=create_window(self.window_size, self.horizon)
+        
         self.type=args['type']
         self.W = int((args['map_extent'][1] - args['map_extent'][0])/self.resolution)
         self.H = int((args['map_extent'][3] - args['map_extent'][2])/self.resolution)
         self.reduce_map = args['reduce_map']
+        self.normalize=args['normalize']
+        self.only_last=args['only_last']
+        if self.only_last:
+            self.window=create_window(self.window_size, 1)
+        else:
+            self.window=create_window(self.window_size, self.horizon)
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -48,24 +54,27 @@ class FocalLoss(Metric):
         """
 
         # Unpack arguments
-        pred = predictions['pred']/(torch.max(predictions['pred'],dim=-1,keepdim=True)[0])
-        # pred = predictions['pred']
+        if self.normalize:
+            pred = predictions['pred']/(torch.max(predictions['pred'].detach(),dim=-1,keepdim=True)[0])
+        else:
+            pred = predictions['pred']
         # mask_da = predictions['mask'].view(-1,pred.shape[-2],pred.shape[-1]).unsqueeze(1)
         mask_da = predictions['mask']
         traj_gt = ground_truth['traj'] if type(ground_truth) == dict else ground_truth
         # true_heatmap,gs_map = self.generate_gtmap(traj_gt,pred.shape)
         true_heatmap,gs_map = self.generate_gtmap(traj_gt,mask_da)
         # gs_map=gs_map*mask_da
-        mask = (gs_map > 0.25).float()
+        # mask = (gs_map > 0.25).float()
+        mask = (true_heatmap == 1.0).float()
         pred_heatmap = torch.clamp(pred, min=1e-6,max=(1-(1e-6)))
         if self.type=='mean':
-            return -torch.sum(
+            return -torch.mean(
                     torch.pow(pred_heatmap - gs_map, 2) * (
                     mask * torch.log(pred_heatmap)
                     +
                     (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
                 )
-            )/(pred.shape[0]*pred.shape[1])
+            )
         else:
             return -torch.sum(
                     torch.pow(pred_heatmap - gs_map, 2) * (
@@ -73,12 +82,15 @@ class FocalLoss(Metric):
                     +
                     (1-mask) * (torch.pow(1 - gs_map, 4) * torch.log(1 - pred_heatmap))
                 )
-            )
+            )/max(1,mask_da.shape[0])
 
 
 
     def generate_gtmap(self, traj_gt: torch.Tensor,mask,visualize=False) -> torch.Tensor:
-        shape=[mask.shape[0],self.horizon,self.H,self.W]
+        if self.only_last:
+            shape=[mask.shape[0],1,self.H,self.W]
+        else:
+            shape=[mask.shape[0],self.horizon,self.H,self.W]
         swapped=torch.zeros_like(traj_gt).to(device)
         swapped[:,:,0],swapped[:,:,1]=-traj_gt[:,:,1],traj_gt[:,:,0]
         coord=torch.round(swapped/self.resolution+self.compensation).int()
@@ -92,11 +104,17 @@ class FocalLoss(Metric):
                     gt_map[batch,t,x-1:x+1,y-1:y+1]=1##Only one ground truth in each heatmap layer
             # gs_map=F.conv2d(gt_map, self.window, padding = self.window_size//2, groups = self.horizon)
             return gt_map
-        for batch in range(shape[0]):
-            for t in range(shape[1]):
-                x,y=coord[batch,t]
-                gt_map[batch,t,x,y]=1##Only one ground truth in each heatmap layer
-        gs_map=F.conv2d(gt_map, self.window, padding = self.window_size//2, groups = self.horizon)##Gaussian smoothed heatmap
+        if self.only_last:
+            for batch in range(shape[0]):
+                x,y=coord[batch,-1]
+                gt_map[batch,0,x,y]=1
+            gs_map=F.conv2d(gt_map, self.window, padding = self.window_size//2, groups = 1)
+        else:
+            for batch in range(shape[0]):
+                for t in range(shape[1]):
+                    x,y=coord[batch,t]
+                    gt_map[batch,t,x,y]=1##Only one ground truth in each heatmap layer
+            gs_map=F.conv2d(gt_map, self.window, padding = self.window_size//2, groups = self.horizon)##Gaussian smoothed heatmap
         if not self.reduce_map:
             return gt_map,gs_map
         gs_map=gs_map.view([gs_map.shape[0],gs_map.shape[1],-1])

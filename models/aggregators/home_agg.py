@@ -78,12 +78,14 @@ class Sample2DAggregator(PredictionAggregator):
         keys = self.key_emb(context_encoding).permute(1, 0, 2)
         vals = self.val_emb(context_encoding).permute(1, 0, 2)
         mask_under=(self.sampler.sample_mask(map_mask))
+        torch.cuda.empty_cache()
         if self.apply_mask:
             
             attn_mask=~mask_under.unsqueeze(-1).repeat(self.num_heads,1,context_encoding.shape[1])
             attn_output, attn_output_weights = self.mha(query, keys, vals, attn_mask=attn_mask)
         else:
             attn_output, attn_output_weights = self.mha(query, keys, vals)
+        torch.cuda.empty_cache()
         attn_output[torch.isnan(attn_output)]=0
         op = attn_output.permute(1,0,2)
         op = op.view(op.shape[0],self.sampler.H,self.sampler.W,-1)
@@ -91,7 +93,8 @@ class Sample2DAggregator(PredictionAggregator):
         if self.conv:
             op=self.final_convs(op.permute(0,3,1,2))
         outputs = {'agg_encoding': op,'under_sampled_mask': mask_under,'target_encodings':target_agent_enc}
-        if encodings['gt_traj'] is  not None:
+        torch.cuda.empty_cache()
+        if encodings['gt_traj'] is not None:
             outputs['gt_traj']= encodings['gt_traj']
         return outputs
 

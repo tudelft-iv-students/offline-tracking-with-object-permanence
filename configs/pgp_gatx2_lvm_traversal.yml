@@ -68,6 +68,7 @@ decoder_args:
   encoding_size: 160
   agg_type: 'sample_specific'
   lv_dim: 5
+  pretrain_mlp: False
   num_clusters: 10
 
 

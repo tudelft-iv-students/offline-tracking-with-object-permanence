@@ -9,8 +9,8 @@ from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
 # Import models
 from models.model import PredictionModel
 
+from models.encoders.home_encoder import HomeEncoder
 from models.encoders.raster_encoder import RasterEncoder
-
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
 from models.aggregators.concat import Concat
@@ -27,6 +27,7 @@ from models.decoders.lvm import LVM
 from models.decoders.ram_decoder import RamDecoder
 from models.decoders.heatmap import HTMAP
 from models.decoders.home_decoder import HomeDecoder
+from models.decoders.home_atten_decoder import HomeDecoder_attn
 
 # Import metrics
 from metrics.mtp_loss import MTPLoss
@@ -91,7 +92,8 @@ def initialize_encoder(encoder_type: str, encoder_args: Dict):
     encoder_mapping = {
         'raster_encoder': RasterEncoder,
         'polyline_subgraphs': PolylineSubgraphs,
-        'pgp_encoder': PGPEncoder
+        'pgp_encoder': PGPEncoder,
+        'home_encoder':HomeEncoder
     }
 
     return encoder_mapping[encoder_type](encoder_args)
@@ -130,7 +132,8 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
         'lvm': LVM,
         'heatmap':HTMAP,
         'home':HomeDecoder,
-        'ram_decoder':RamDecoder
+        'ram_decoder':RamDecoder,
+        'home_atten':HomeDecoder_attn
     }
 
     return decoder_mapping[decoder_type](decoder_args)

@@ -55,8 +55,8 @@ class Sampler():
         :param mask: mask raster with shape [B,H,W]
         :output nodes_2D: A list of 2D coordinates of sampled goals  
         """
-        x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[3],self.map_extent[2],-self.resolution),
-                                       torch.arange(self.map_extent[0],self.map_extent[1],self.resolution))
+        x_coord,y_coord=torch.meshgrid(torch.arange(self.map_extent[3],self.map_extent[2],-self.resolution)-self.resolution/2,
+                                       torch.arange(self.map_extent[0],self.map_extent[1],self.resolution)+self.resolution/2)
         if self.apply_mask and (mask != None):
             B=mask.shape[0]
             if self.resize:

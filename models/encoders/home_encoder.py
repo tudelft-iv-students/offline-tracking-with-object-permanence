@@ -6,7 +6,7 @@ import numpy as np
 from torchvision.models import resnet18, resnet34, resnet50
 # raise NotImplementedError()
 # from positional_encodings import PositionalEncodingPermute2D
-from models.library.blocks import Home_temp_enocder,get_track_mask
+from models.library.blocks import *
 from return_device import return_device
 import itertools
 device = return_device()
@@ -76,7 +76,7 @@ class PositionalEncodingPermute2D(nn.Module):
     @property
     def org_channels(self):
         return self.penc.org_channels
-class RasterEncoder(PredictionEncoder):
+class HomeEncoder(PredictionEncoder):
 
     def __init__(self, args: Dict):
         """
@@ -97,12 +97,24 @@ class RasterEncoder(PredictionEncoder):
                             'resnet50': resnet50}
 
         # Initialize backbone:
-        resnet_model = resnet_backbones[args['backbone']](pretrained=False)
-        conv1_new = nn.Conv2d(args['input_channels'], 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-        modules = list(resnet_model.children())[:-2]
-        modules[0] = conv1_new
-        self.backbone = nn.Sequential(*modules)
+        if args['backbone']=='home':
+            self.backbone = Home_conv(args['input_channels'])
+        else:
+            resnet_model = resnet_backbones[args['backbone']](pretrained=False)
+            conv1_new = nn.Conv2d(args['input_channels'], 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+            modules = list(resnet_model.children())[:-2]
+            modules[0] = conv1_new
+            self.backbone = nn.Sequential(*modules)
 
+        self.hidden_dim=args['hidden_dim']
+        self.emb_size=args['emb_size']
+        self.num_heads=args['num_heads']
+        self.traj_forecaster=args['traj_forecaster']
+        self.target_agent_encoder=Home_temp_enocder(conv1d_n_in=7, conv1d_n_out=64, gru_in_hidden_feat=self.hidden_dim, gru_in_out_feat=self.emb_size)
+        self.agent_encoder=Home_temp_enocder(conv1d_n_in=7, conv1d_n_out=64, gru_in_hidden_feat=self.hidden_dim, gru_in_out_feat=self.emb_size)
+        self.social_encoder=Home_social_enocder(self.emb_size,self.num_heads)
+        if self.traj_forecaster:
+            self.target_traj_encoder=leaky_MLP(args['target_agent_feat_size'],args['target_agent_enc_size'])
         # Positional encodings:
         num_channels = 2048 if self.backbone == 'resnet50' else 512
         self.use_pos_enc = args['use_positional_encoding']
@@ -126,9 +138,9 @@ class RasterEncoder(PredictionEncoder):
 
         # Unpack inputs:
         target_agent_representation = (inputs['target_agent_representation']).type(torch.float32)
-        surrounding_agent_representation = inputs['surrounding_agent_representation']
-        map_representation = inputs['map_representation'][0]
-        
+        surrounding_agent_representation = inputs['surrounding_agent_representation']['image']
+        agent_representation = torch.cat((inputs['surrounding_agent_representation']['vehicles'],inputs['surrounding_agent_representation']['pedestrians']),dim=1)
+        map_representation = inputs['map_representation']['image']
         
         # Apply Conv layers
         rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1).type(torch.float32)
@@ -143,19 +155,32 @@ class RasterEncoder(PredictionEncoder):
         # context_encoding = context_encoding.permute(0, 2, 1)
 
         # Target agent encoding
-        
-        target_agent_enc = self.relu(self.target_agent_encoder(target_agent_representation))
+        if self.traj_forecaster:
+            traj_feat=self.target_traj_encoder(target_agent_representation[:,-1,2:-2])
+        agent_tracks_full = agent_representation.view(-1,agent_representation.shape[-2],agent_representation.shape[-1]).transpose(-1,-2) 
+        agent_masks = get_track_mask(agent_representation)
+        target_track= target_agent_representation.transpose(-1,-2)
+        target_emb = self.target_agent_encoder(target_track)
+        if agent_masks.sum() !=0:
+            mask_index = list(itertools.compress(range(len(agent_masks)), agent_masks))
+            agent_tracks= torch.stack(list(itertools.compress(agent_tracks_full, agent_masks)), dim=0)
+            agent_emb = self.agent_encoder(agent_tracks,mask_index,max_num=agent_tracks_full.shape[0]).view(agent_representation.shape[0],-1,self.emb_size)
+            target_agent_enc=self.social_encoder(target_emb,agent_emb,agent_masks.view(target_agent_representation.shape[0],-1))
+        else:
+            target_agent_enc=target_emb
+            
 
         # Return encodings
         encodings = {'target_agent_encoding': target_agent_enc,
                      'context_encoding': {'combined': context_encoding,
                                           'combined_masks': None,
-                                          'map': rasterized_input,
+                                          'map': None,
                                           'vehicles': None,
                                           'pedestrians': None,
-                                          'map_masks': inputs['map_representation'][1].type(torch.bool),
+                                          'map_masks': inputs['map_representation']['mask'].type(torch.bool),
                                           'vehicle_masks': None,
-                                          'pedestrian_masks': None
+                                          'pedestrian_masks': None,
+                                          'traj_feature':traj_feat
                                           },
                      }
         if inputs['gt_traj'] is  not None:
@@ -163,3 +188,40 @@ class RasterEncoder(PredictionEncoder):
         else:
             encodings['gt_traj']= None
         return encodings
+
+class Home_social_enocder(nn.Module):
+    def __init__(self, emb_size, num_heads):
+        super(Home_social_enocder, self).__init__()
+        self.attention=nn.MultiheadAttention(emb_size, num_heads)
+        self.normalizer=LayerNorm(emb_size)
+        self.num_heads=num_heads
+    def forward(self,target_emb,agent_emb,agent_mask):
+        indices=torch.nonzero(agent_mask.sum(-1)).squeeze(1)
+        filtered_agent_emb=agent_emb[indices]
+        filtered_agent_mask=agent_mask[indices]
+        filtered_target_emb=target_emb[indices]
+        attn_mask=~(filtered_agent_mask.repeat(1,self.num_heads).view(filtered_agent_mask.shape[0]*self.num_heads,-1).unsqueeze(1))
+        target_query=filtered_target_emb.unsqueeze(0)
+        agnet_key_value=filtered_agent_emb.transpose(0,1)
+        attn_output,_=self.attention(query=target_query, key=agnet_key_value, value=agnet_key_value, need_weights=False, attn_mask=attn_mask)
+        # attn_output[torch.isnan(attn_output)]=0
+        attn_output=attn_output.squeeze(0)
+        target_agent_enc=target_emb.clone()
+        for idx, enc in zip(indices, attn_output):
+            target_agent_enc[idx] = target_agent_enc[idx]+ enc
+        return self.normalizer(target_agent_enc)
+
+class Home_conv(nn.Module):
+    def __init__(self, input_channels=6):
+        super(Home_conv, self).__init__()
+        self.conv_layers=nn.Sequential(
+            CNNBlock(in_channels=input_channels, out_channels=32,kernel_size=3,stride=2,padding=1),
+            CNNBlock(in_channels=32, out_channels=64,kernel_size=3,stride=2,padding=1),
+            CNNBlock(in_channels=64, out_channels=128,kernel_size=3,stride=1,padding=1),
+            CNNBlock(in_channels=128, out_channels=256,kernel_size=3,stride=2,padding=1),
+            CNNBlock(in_channels=256, out_channels=512,kernel_size=3,stride=2,padding=1)
+        )
+
+    def forward(self,raster_img):
+        
+        return self.conv_layers(raster_img)
