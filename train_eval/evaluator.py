@@ -72,7 +72,10 @@ class Evaluator:
 
                 # Load data
                 data = u.send_to_device(u.convert_double_to_float(data))
-                data['inputs']['gt_traj']= None
+                if self.teacher_force:
+                    data['inputs']['gt_traj']=data['ground_truth']['traj']
+                else:
+                    data['inputs']['gt_traj']= None
                 # Forward pass
                 predictions = self.model(data['inputs'])
 
@@ -86,7 +89,7 @@ class Evaluator:
         with open(os.path.join(output_dir, 'results', "results.txt"), "w") as out_file:
             for metric in self.metrics:
                 avg_metric = agg_metrics[metric.name]/agg_metrics['sample_count']
-                output = metric.name + ': ' + format(avg_metric, '0.2f')
+                output = metric.name + ': ' + format(avg_metric, '0.4f')
                 print(output)
                 out_file.write(output + '\n')
 

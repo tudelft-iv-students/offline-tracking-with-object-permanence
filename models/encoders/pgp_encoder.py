@@ -169,7 +169,7 @@ class PGPEncoder(PredictionEncoder):
         # Form a large batch of all sequences in the batch
         masks_for_batching = ~masks[:, :, :, 0].bool()
         masks_for_batching = masks_for_batching.any(dim=-1).unsqueeze(2).unsqueeze(3)
-        feat_embedding_batched = torch.masked_select(feat_embedding, masks_for_batching)
+        feat_embedding_batched = torch.masked_select(feat_embedding, masks_for_batching)# select the feature from actual lane nodes and get rid of padded placeholder
         feat_embedding_batched = feat_embedding_batched.view(-1, feat_embedding.shape[2], feat_embedding.shape[3])
 
         # Pack padded sequences

@@ -67,47 +67,50 @@ class TorchModalitySampler(nn.Module):
         return final_end_points, final_confidences
 
 
-class KMeansProbSampler(nn.Module):
-    def __init__(self, n_targets: int, n_iterations: int):
+class FDESampler(nn.Module):
+    def __init__(self, n_targets: int, n_iterations: int, sample_radius: float, resolution=0.25):
         """
-        FIXME: deprecated
 
         Args:
             n_targets:
             n_iterations:
         """
-        super(KMeansProbSampler, self).__init__()
+        super(FDESampler, self).__init__()
         self._n_targets = n_targets
-        self._n_iterations = n_iterations
+        self.num_iters = n_iterations
+        self.radius=sample_radius
+        self.MR_sampler=TorchModalitySampler(n_targets,sample_radius)
+        self.resolution=resolution
+        
+    @torch.no_grad()
+    def forward(self, heatmap: torch.Tensor) -> torch.Tensor:
+        assert(heatmap.shape[1]==1)
+        hm = heatmap.clone()
+        B = hm.shape[0]
+        clusters,pre_confidences = self.MR_sampler(heatmap)
+        x_coord,y_coord=torch.meshgrid(torch.arange(488), 
+                                        torch.arange(488))
+        indices=torch.cat([x_coord.unsqueeze(-1),y_coord.unsqueeze(-1)],dim=-1).to(heatmap.device)
+        indices=indices.flatten(0,1).unsqueeze(0)
+        clusters=clusters.flatten(0,1).unsqueeze(1)
 
-    def forward(self, clusters: torch.Tensor, heatmap: torch.Tensor) -> torch.Tensor:
-        hm = heatmap.numpy().copy()
-        if len(hm.shape) == 3:
-            assert hm.shape[0] == 1, f'Invalid heamap shape: {hm.shape}'
-            hm = hm.squeeze(0)
-
-        cs = clusters.numpy()
-
-        for _ in range(self._n_iterations):
-            cs = self._update_clusters(cs, hm)
-
-        return torch.tensor(cs, dtype=torch.float32)
-
-    def _update_clusters(self, clusters: np.ndarray, hm: np.ndarray) -> np.ndarray:
-        n_rows, n_cols = hm.shape
-
-        new_clusters = np.zeros_like(clusters, dtype=np.float32)
-
-        for row in range(n_rows):
-            for col in range(n_cols):
-                best_cluster, best_dist, best_coords = None, None, None
-                for c in range(clusters.shape[0]):
-                    dist = max(1, np.sqrt((clusters[c, 0] - row) ** 2 + (clusters[c, 1] - col) ** 2))
-                    if best_dist is None or dist < best_dist:
-                        best_cluster = c
-                        best_dist = dist
-                        best_coords = [row, col]
-
-                new_clusters[best_cluster, :] += np.array(best_coords, dtype=np.float32) * hm[row, col] / best_dist
-
-        return new_clusters
+        for _ in range(self.num_iters):
+            torch.cuda.empty_cache()
+            d=torch.norm(indices-clusters,dim=-1).view(B,self._n_targets,-1)
+            d=torch.clamp(d,min=1e-3)
+            m,_ = torch.min(d,dim=1)
+            mask = (d<(3/self.resolution)).float()
+            new_clusters=torch.zeros_like(clusters).view(B,self._n_targets,-1)
+            
+            for k in range(self._n_targets):
+                N=torch.sum(mask[:,k]*(hm.flatten(1)/d[:,k])*(m/d[:,k]),-1)
+                new_clusters[:,k]=torch.sum(indices.repeat(B,1,1)*(mask[:,k]*(hm.flatten(1)/d[:,k])*(m/d[:,k])).unsqueeze(-1),-2)/N.unsqueeze(-1)
+                
+            clusters=new_clusters.flatten(0,1).unsqueeze(1)
+        torch.cuda.empty_cache()
+        new_clusters=torch.round(new_clusters).long()
+        confidences=torch.zeros_like(pre_confidences)
+        for b in range(B):
+            for i in range(self._n_targets):
+                confidences[b,i]=(hm[b,0,new_clusters[b,i,0]-self.radius:new_clusters[b,i,0]+self.radius,new_clusters[b,i,1]-self.radius:new_clusters[b,i,1]+self.radius]).sum()
+        return new_clusters,confidences

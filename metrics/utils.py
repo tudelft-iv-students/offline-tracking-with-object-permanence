@@ -116,6 +116,26 @@ def min_ade(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> T
 
     return err, inds
 
+def min_ade_l1(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    """
+    Computes l1 error for the best trajectory is a set, with respect to ground truth
+    :param traj: predictions, shape [batch_size, num_modes, sequence_length, 2]
+    :param traj_gt: ground truth trajectory, shape [batch_size, sequence_length, 2]
+    :param masks: masks for varying length ground truth, shape [batch_size, sequence_length]
+    :return errs, inds: errors and indices for modes with min error, shape [batch_size]
+    """
+    num_modes = traj.shape[1]
+
+    traj_gt_rpt = traj_gt.unsqueeze(1).repeat(1, num_modes, 1, 1)
+    masks_rpt = masks.unsqueeze(1).repeat(1, num_modes, 1)
+    err = traj_gt_rpt - traj[:, :, :, 0:2]
+    err = torch.abs(err)
+    err = torch.sum(err, dim=3)
+    err = torch.sum(err * (1 - masks_rpt), dim=2) / torch.sum((1 - masks_rpt), dim=2)
+    err, inds = torch.min(err, dim=1)
+
+    return err, inds
+
 
 def min_fde(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
     """

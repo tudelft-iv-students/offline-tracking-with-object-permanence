@@ -16,7 +16,7 @@ class TrajectoryDataset(torch_data.Dataset):
         :param mode: Mode of operation of dataset
         :param data_dir: Directory to store extracted pre-processed data
         """
-        if mode not in ['compute_stats', 'extract_data', 'load_data']:
+        if mode not in ['compute_stats', 'extract_data', 'load_data','load_miss_anns']:
             raise Exception('Dataset mode needs to be one of {compute_stats, extract_data or load_data}')
         self.mode = mode
         self.data_dir = data_dir

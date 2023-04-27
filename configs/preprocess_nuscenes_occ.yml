@@ -1,0 +1,68 @@
+dataset: 'nuScenes'
+version: 'v1.0-trainval'
+agent_setting: 'single_agent'
+input_representation: 'graphs_occ'
+helper: 'occ'
+
+train_set_args:
+  split: 'train'
+  t_h: 2
+  t_f: 18.5
+  split_name: 'train'
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  augment: True
+  mask_prob: 0.8
+  augment_prob: 0.4 
+  augment_min: 1.5
+  dep_thresh: 12
+  dep_percent: 0.75
+  traj_mask_prob: 0.2
+
+
+val_set_args:
+  split: 'train_val'
+  t_h: 2
+  t_f: 18.5
+  split_name: 'val'
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  augment: True
+  mask_prob: 0.8
+  augment_prob: 0.4 
+  augment_min: 1.5
+  dep_thresh: 9
+  dep_percent: 0.75
+  traj_mask_prob: 0.2
+
+test_set_args:
+  split: 'val'
+  t_h: 2
+  t_f: 18.5
+  use_home: False
+  split_name: 'test'
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  augment: True
+  augment: True
+  mask_prob: 0.8
+  augment_prob: 0.4 
+  augment_min: 1.5
+  dep_thresh: 9
+  dep_percent: 0.75
+  traj_mask_prob: 0.2
+
+batch_size: 36
+num_workers: 12
+verbosity: True

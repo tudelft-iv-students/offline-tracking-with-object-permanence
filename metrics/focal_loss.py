@@ -86,22 +86,25 @@ class FocalLoss(Metric):
 
 
 
-    def generate_gtmap(self, traj_gt: torch.Tensor,mask,visualize=False) -> torch.Tensor:
+    def generate_gtmap(self, traj_gt: torch.Tensor,mask=None,visualize=False) -> torch.Tensor:
         if self.only_last:
-            shape=[mask.shape[0],1,self.H,self.W]
+            shape=[traj_gt.shape[0],1,self.H,self.W]
         else:
-            shape=[mask.shape[0],self.horizon,self.H,self.W]
+            shape=[traj_gt.shape[0],self.horizon,self.H,self.W]
         swapped=torch.zeros_like(traj_gt).to(device)
         swapped[:,:,0],swapped[:,:,1]=-traj_gt[:,:,1],traj_gt[:,:,0]
         coord=torch.round(swapped/self.resolution+self.compensation).int()
         coord=torch.clamp(coord,0,shape[-1])
         gt_map=torch.zeros(shape,device=device)
         if visualize:
-            gt_map=torch.zeros([mask.shape[0],traj_gt.shape[1],self.H,self.W],device=device)
+            gt_map=torch.zeros([traj_gt.shape[0],traj_gt.shape[1],self.H,self.W],device=device)
             for batch in range(shape[0]):
                 for t in range(traj_gt.shape[1]):
                     x,y=coord[batch,t]
-                    gt_map[batch,t,x-1:x+1,y-1:y+1]=1##Only one ground truth in each heatmap layer
+                    try:
+                        gt_map[batch,t,x-1:x+1,y-1:y+1]=1##Only one ground truth in each heatmap layer
+                    except:
+                        continue
             # gs_map=F.conv2d(gt_map, self.window, padding = self.window_size//2, groups = self.horizon)
             return gt_map
         if self.only_last:

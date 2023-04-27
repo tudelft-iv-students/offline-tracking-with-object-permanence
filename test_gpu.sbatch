@@ -13,7 +13,7 @@
 #SBATCH --qos=short
 
 # The default run (wall-clock) time is 1 minute
-#SBATCH --time=3:00:00
+#SBATCH --time=4:00:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -23,13 +23,20 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=20gb
+#SBATCH --mem=18gb
 
+# Request a GPU
+#SBATCH --gres=gpu:v100:1
 
 # Set mail type to 'END' to receive a mail when the job finishes
 # Do not enable mails when submitting large numbers (>20) of jobs at once
 #SBATCH --mail-type=END
 
+# Measure GPU usage of your job (initialization)
+previous=$(/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/tail -n '+2')
+
+# Use this simple command to check that your sbatch settings are working (it should show the GPU that you requested)
+/usr/bin/nvidia-smi
 
 # Your job commands go below here
 
@@ -45,12 +52,12 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 # srun python train.py -c configs/ram.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_ram/ -w ./output/pretrain/checkpoints/1.tar -n 1
 # srun python train.py -c configs/raster_home.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_less_overfit/ -w ./output/test_less_overfit/checkpoints/8.tar -n 3
 # srun python train.py -c configs/raster.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_heatmap/ -w ./output/test_heatmap/checkpoints/5.tar -n 1
-srun python preprocess.py -c configs/preprocess_nuscenes_occ.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph
+srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/no_map/ -n 15 -w ./output/test_occ/ugru/no_map/checkpoints/9.tar
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 
 # Your job commands go above here
 
 # Measure GPU usage of your job (result)
-# /usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"
+/usr/bin/nvidia-smi --query-accounted-apps='gpu_utilization,mem_utilization,max_memory_usage,time' --format='csv' | /usr/bin/grep -v -F "$previous"
 conda deactivate

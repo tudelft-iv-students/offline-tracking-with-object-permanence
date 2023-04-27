@@ -1,6 +1,6 @@
 from datasets.interface import SingleAgentDataset
 from nuscenes.eval.prediction.splits import get_prediction_challenge_split
-from nuscenes.prediction import PredictHelper
+from datasets.nuScenes.prediction import PredictHelper_occ
 import numpy as np
 from typing import Dict, Union
 import abc
@@ -14,7 +14,7 @@ class NuScenesTrajectories(SingleAgentDataset):
     NuScenes dataset class for single agent prediction
     """
 
-    def __init__(self, mode: str, data_dir: str, args: Dict, helper: PredictHelper):
+    def __init__(self, mode: str, data_dir: str, args: Dict, helper: PredictHelper_occ):
         """
         Initialize predict helper, agent and scene representations
         :param mode: Mode of operation of dataset, one of {'compute_stats', 'extract_data', 'load_data'}

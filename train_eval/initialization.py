@@ -1,10 +1,12 @@
 # Import datasets
 from nuscenes import NuScenes
 from nuscenes.prediction import PredictHelper
+from datasets.nuScenes.prediction import PredictHelper_occ
 from datasets.interface import TrajectoryDataset
 from datasets.nuScenes.nuScenes_raster import NuScenesRaster
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
 from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
+from datasets.nuScenes.nuScenes_graphs_occ import NuScenesGraphs_OCC
 
 # Import models
 from models.model import PredictionModel
@@ -13,25 +15,29 @@ from models.encoders.home_encoder import HomeEncoder
 from models.encoders.raster_encoder import RasterEncoder
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
+from models.encoders.pgp_encoder_v1 import PGPEncoder_occ
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention
 from models.aggregators.goal_conditioned import GoalConditioned
 from models.aggregators.home_agg import Sample2DAggregator
 from models.aggregators.home_orig import HomeAggregator
+from models.aggregators.attention_occ import Attention_occ
 from models.aggregators.pgp import PGP
 from models.aggregators.ram_agg import RamAggregator
 from models.decoders.mtp import MTP
 from models.decoders.multipath import Multipath
 from models.decoders.covernet import CoverNet
-from models.decoders.lvm import LVM
+# from models.decoders.lvm import LVM
 from models.decoders.ram_decoder import RamDecoder
 from models.decoders.heatmap import HTMAP
 from models.decoders.home_decoder import HomeDecoder
 from models.decoders.home_atten_decoder import HomeDecoder_attn
+from models.decoders.mlp_occ import MLP_occ
 
 # Import metrics
 from metrics.mtp_loss import MTPLoss
 from metrics.min_ade import MinADEK
+from metrics.min_ade_l1 import MinL1K
 from metrics.min_ade_loss import MinADE_loss
 from metrics.min_fde import MinFDEK
 from metrics.miss_rate import MissRateK
@@ -39,6 +45,12 @@ from metrics.covernet_loss import CoverNetLoss
 from metrics.pi_bc import PiBehaviorCloning
 from metrics.goal_pred_nll import GoalPredictionNLL
 from metrics.focal_loss import FocalLoss
+from metrics.l1_loss import L1_loss
+from metrics.yaw_loss import Yaw_loss
+from metrics.l1_loss_rev import L1_loss_REV
+from metrics.yaw_loss_rev import Yaw_loss_REV
+from metrics.ade import ADE
+from metrics.mr import MissRate
 from metrics.drivable_area_loss import DrivablelLoss
 from typing import List, Dict, Union
 
@@ -52,11 +64,12 @@ def initialize_dataset(dataset_type: str, args: List) -> TrajectoryDataset:
     dataset_classes = {'nuScenes_single_agent_raster': NuScenesRaster,
                        'nuScenes_single_agent_vector': NuScenesVector,
                        'nuScenes_single_agent_graphs': NuScenesGraphs,
+                       'nuScenes_single_agent_graphs_occ': NuScenesGraphs_OCC
                        }
     return dataset_classes[dataset_type](*args)
 
 
-def get_specific_args(dataset_name: str, data_root: str, version: str = None) -> List:
+def get_specific_args(dataset_name: str, data_root: str, version: str = None, helper_type: str = None) -> List:
     """
     Helper function to get dataset specific arguments.
     """
@@ -64,7 +77,10 @@ def get_specific_args(dataset_name: str, data_root: str, version: str = None) ->
     specific_args = []
     if dataset_name == 'nuScenes':
         ns = NuScenes(version, dataroot=data_root)
-        pred_helper = PredictHelper(ns)
+        if helper_type=='occ':
+            pred_helper = PredictHelper_occ(ns)
+        else:
+            pred_helper = PredictHelper(ns)
         specific_args.append(pred_helper)
 
     return specific_args
@@ -93,6 +109,7 @@ def initialize_encoder(encoder_type: str, encoder_args: Dict):
         'raster_encoder': RasterEncoder,
         'polyline_subgraphs': PolylineSubgraphs,
         'pgp_encoder': PGPEncoder,
+        'pgp_encoder_occ': PGPEncoder_occ,
         'home_encoder':HomeEncoder
     }
 
@@ -109,6 +126,7 @@ def initialize_aggregator(aggregator_type: str, aggregator_args: Union[Dict, Non
         'global_attention': GlobalAttention,
         'gc': GoalConditioned,
         'pgp': PGP,
+        'attn_occ': Attention_occ,
         'home_agg': HomeAggregator,
         '2D_sample':Sample2DAggregator,
         'ram':RamAggregator
@@ -129,11 +147,12 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
         'mtp': MTP,
         'multipath': Multipath,
         'covernet': CoverNet,
-        'lvm': LVM,
+        # 'lvm': LVM,
         'heatmap':HTMAP,
         'home':HomeDecoder,
         'ram_decoder':RamDecoder,
-        'home_atten':HomeDecoder_attn
+        'home_atten':HomeDecoder_attn,
+        'mlp_occ':MLP_occ
     }
 
     return decoder_mapping[decoder_type](decoder_args)
@@ -151,11 +170,18 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'min_ade_k': MinADEK,
         'min_ade_loss': MinADE_loss,
         'min_fde_k': MinFDEK,
+        'min_l1_k':MinL1K,
         'miss_rate_k': MissRateK,
         'pi_bc': PiBehaviorCloning,
         'goal_pred_nll': GoalPredictionNLL,
         'focal_loss':FocalLoss,
-        'drivable_loss':DrivablelLoss
+        'drivable_loss':DrivablelLoss,
+        'l1_loss': L1_loss,
+        'yaw_loss':Yaw_loss,
+        'l1_loss_rev': L1_loss_REV,
+        'yaw_loss_rev':Yaw_loss_REV,
+        'ade':ADE,
+        'miss_rate':MissRate
     }
 
     if metric_args is not None:

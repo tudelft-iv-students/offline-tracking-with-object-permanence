@@ -3,6 +3,8 @@ Basic building blocks
 """
 from typing import Tuple, Union
 import torch.nn as nn
+from torch import Tensor
+from typing import List
 import torch
 from math import gcd
 
@@ -118,16 +120,22 @@ class CNNBlock(nn.Module):
             **kwargs:
         """
         super(CNNBlock, self).__init__()
-        if add_coord:
+        self.add_coord=add_coord
+        if self.add_coord:
             self.addcoords = AddCoords(with_r=False)
             self.in_channels=in_channels+2
+        else:
+            self.in_channels=in_channels
         self._conv = nn.Conv2d(self.in_channels, out_channels, kernel_size, stride, padding, bias=bias, **kwargs)
         self._batchnorm = nn.BatchNorm2d(out_channels)
         self._relu = nn.ReLU()
         self._activate_relu = activate_relu
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self._batchnorm(self._conv(self.addcoords(x)))
+        if self.add_coord:
+            x = self._batchnorm(self._conv(self.addcoords(x)))
+        else:
+            x = self._batchnorm(self._conv(x))
         if self._activate_relu:
             x = self._relu(x)
         return x
@@ -268,3 +276,80 @@ class CoordConv(nn.Module):
         ret = self.addcoords(x)
         ret = self.conv(ret)
         return ret
+class Att(nn.Module):
+    """
+    Attention block to pass context nodes information to target nodes
+    This is used in Actor2Map, Actor2Actor, Map2Actor and Map2Map
+    """
+    def __init__(self, n_agt: int, n_ctx: int) -> None:
+        super(Att, self).__init__()
+        norm = "GN"
+        ng = 1
+
+        self.dist = nn.Sequential(
+            nn.Linear(2, n_ctx),
+            nn.ReLU(inplace=True),
+            Linear(n_ctx, n_ctx, norm=norm, ng=ng),
+        )
+
+        self.query = Linear(n_agt, n_ctx, norm=norm, ng=ng)
+
+        self.ctx = nn.Sequential(
+            Linear(3 * n_ctx, n_agt, norm=norm, ng=ng),
+            nn.Linear(n_agt, n_agt, bias=False),
+        )
+
+        self.agt = nn.Linear(n_agt, n_agt, bias=False)
+        self.norm = nn.GroupNorm(gcd(ng, n_agt), n_agt)
+        self.linear = Linear(n_agt, n_agt, norm=norm, ng=ng, act=False)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, agts: Tensor, agt_idcs: List[Tensor], agt_ctrs: List[Tensor], ctx: Tensor, ctx_idcs: List[Tensor], ctx_ctrs: List[Tensor], dist_th: float) -> Tensor:
+        res = agts
+        if len(ctx) == 0:
+            agts = self.agt(agts)
+            agts = self.relu(agts)
+            agts = self.linear(agts)
+            agts += res
+            agts = self.relu(agts)
+            return agts
+
+        batch_size = len(agt_idcs)
+        hi, wi = [], []
+        hi_count, wi_count = 0, 0
+        for i in range(batch_size):
+            dist = agt_ctrs[i].view(-1, 1, 2) - ctx_ctrs[i].view(1, -1, 2)
+            dist = torch.sqrt((dist ** 2).sum(2))
+            mask = dist <= dist_th
+
+            idcs = torch.nonzero(mask, as_tuple=False)
+            if len(idcs) == 0:
+                continue
+
+            hi.append(idcs[:, 0] + hi_count)
+            wi.append(idcs[:, 1] + wi_count)
+            hi_count += len(agt_idcs[i])
+            wi_count += len(ctx_idcs[i])
+        hi = torch.cat(hi, 0)
+        wi = torch.cat(wi, 0)
+
+        agt_ctrs = torch.cat(agt_ctrs, 0)
+        ctx_ctrs = torch.cat(ctx_ctrs, 0)
+        dist = agt_ctrs[hi] - ctx_ctrs[wi]
+        dist = self.dist(dist)
+
+        query = self.query(agts[hi])
+
+        ctx = ctx[wi]
+        ctx = torch.cat((dist, query, ctx), 1)
+        ctx = self.ctx(ctx)
+
+        agts = self.agt(agts)
+        agts.index_add_(0, hi, ctx)
+        agts = self.norm(agts)
+        agts = self.relu(agts)
+
+        agts = self.linear(agts)
+        agts += res
+        agts = self.relu(agts)
+        return agts

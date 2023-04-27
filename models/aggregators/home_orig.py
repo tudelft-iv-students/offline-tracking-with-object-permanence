@@ -31,13 +31,19 @@ class HomeAggregator(PredictionAggregator):
             raise RuntimeError("The encoder should be a raster encoder!")
         interm_channel=int((input_channel+args['context_enc_size'])/2)
         self.dim_reduction_block=nn.Sequential(
-            nn.Conv2d(input_channel, interm_channel, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+            nn.ConvTranspose2d(input_channel, interm_channel, kernel_size=3, stride=1),
             nn.BatchNorm2d(interm_channel),
             nn.ReLU(),
-            nn.Conv2d(interm_channel, args['context_enc_size'], kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
-            nn.BatchNorm2d(args['context_enc_size']),
-            nn.ReLU()
+            CNNBlock(interm_channel, args['context_enc_size'], kernel_size=3, stride=1, padding=1,bias=True,add_coord=False)
         )
+        # self.dim_reduction_block=nn.Sequential(
+        #     nn.Conv2d(input_channel, interm_channel, kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+        #     nn.BatchNorm2d(interm_channel),
+        #     nn.ReLU(),
+        #     nn.Conv2d(interm_channel, args['context_enc_size'], kernel_size=3, stride=1, padding=1, padding_mode='replicate'),
+        #     nn.BatchNorm2d(args['context_enc_size']),
+        #     nn.ReLU()
+        # )
         self.concat=False
 
         

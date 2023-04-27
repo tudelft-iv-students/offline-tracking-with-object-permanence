@@ -1,0 +1,129 @@
+# Dataset and dataloader parameters
+dataset: 'nuScenes'
+version: 'v1.0-trainval'
+# version: 'v1.0-mini'
+agent_setting: 'single_agent'
+input_representation: 'graphs'
+
+train_set_args: &ds_args
+  split: 'train'
+  # split: 'mini_train'
+  t_h: 2
+  t_f: 6
+  map_extent: [ -50, 50, -20, 100 ]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  random_flips: False
+  use_home: False
+  use_raster: False
+
+val_set_args:
+  <<: *ds_args
+  split: 'train_val'
+  # split: 'mini_val'
+  random_flips: False
+  use_home: False
+  use_raster: False
+
+test_set_args:
+  <<: *ds_args
+  split: 'val'
+  random_flips: False
+  use_home: False
+  use_raster: False
+
+batch_size: 36
+num_workers: 8
+use_teacher_force: True
+nrow: 6
+
+focal_args:
+  map_extent: [ -100, 100, -20, 200 ]
+  gauss_blur: True
+  resolution: 0.5
+  window_size: 13
+  horizon: 1
+  type: 'sum'
+  reduce_map: False
+  normalize: False
+  only_last: True
+
+# Encoder parameters
+encoder_type: 'pgp_encoder_occ'
+encoder_args:
+  map_aggregation: True
+  motion_enc_type: 'ugru'
+  target_agent_feat_size: 4
+  target_agent_emb_size: 16
+  target_agent_enc_size: 32
+  node_feat_size: 6
+  node_emb_size: 16
+  node_enc_size: 32
+  nbr_feat_size: 5
+  nbr_emb_size: 16
+  nbr_enc_size: 32
+  num_gat_layers: 2
+  map_size: 36
+  tn_head_num: 2
+  
+
+
+
+
+# Aggregator parameters
+aggregator_type: 'attn_occ'
+aggregator_args:
+  method: 'attention'
+  pre_train: False
+  time_emb_size: 12
+  target_emb_size: 32
+  query_enc_size: 48
+  attn_size: 36
+  map_size: 36
+
+# Decoder parameters
+decoder_type: 'mlp_occ'
+decoder_args:
+  add_attention: True
+  pretrain_mlp: False
+  time_emb_size: 48
+  add_reverse: True
+
+
+# Optimizer parameters
+optim_args:
+  lr: 0.001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
+
+
+losses: ['l1_loss', 'yaw_loss','l1_loss_rev','yaw_loss_rev']
+loss_weights: [1, 0.5]
+loss_args:
+  - dummy: 0
+  - dummy: 0
+  - dummy: 0
+  - dummy: 0
+
+
+
+tr_metrics: ['l1_loss', 'yaw_loss', 'ade','miss_rate','l1_loss_rev','yaw_loss_rev']
+tr_metric_args:
+  - dummy: 0
+  - dummy: 0
+  - dummy: 0
+  - dist_thresh: 2.0
+  - dummy: 0
+  - dummy: 0
+
+val_metrics: ['ade','miss_rate','yaw_loss','l1_loss_rev','yaw_loss_rev']
+val_metric_args:
+  - dummy: 0
+  - dist_thresh: 2.0
+  - dummy: 0
+  - dummy: 0
+  - dummy: 0
+
+
+log_freq: 100

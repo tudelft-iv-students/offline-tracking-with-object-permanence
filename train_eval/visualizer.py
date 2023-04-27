@@ -41,8 +41,17 @@ class Visualizer:
         self.model.eval()
 
         # Load checkpoint
-        checkpoint = torch.load(checkpoint_path)
+        if torch.cuda.is_available():
+            checkpoint = torch.load(checkpoint_path,map_location='cuda:0')
+        else:
+            checkpoint = torch.load(checkpoint_path,map_location='cpu')
         self.model.load_state_dict(checkpoint['model_state_dict'])
+
+
+        self.model.aggregator.teacher_force = False
+        self.model.decoder.teacher_force = False
+        self.teacher_force = False
+        self.model.decoder.pretrain_mlp = False
 
     def visualize(self, output_dir: str, dataset_type: str):
         """
@@ -115,6 +124,7 @@ class Visualizer:
             # Load data
             data = self.ds[idx]
             data = u.send_to_device(u.convert_double_to_float(u.convert2tensors(data)))
+            data['inputs']['gt_traj']= None
             i_t = data['inputs']['instance_token']
             s_t = data['inputs']['sample_token']
 

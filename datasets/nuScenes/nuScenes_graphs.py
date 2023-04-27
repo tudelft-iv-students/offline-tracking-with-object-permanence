@@ -96,7 +96,7 @@ class NuScenesGraphs(NuScenesVector):
         # Discard lanes outside map extent
         lane_node_feats, lane_ids = self.discard_poses_outside_extent(lane_node_feats, lane_ids)
 
-        # Get edges:
+        # Get edges: mapping index to successor or proximal lanes 
         e_succ = self.get_successor_edges(lane_ids, map_api)
         e_prox = self.get_proximal_edges(lane_node_feats, e_succ)
 
@@ -123,7 +123,9 @@ class NuScenesGraphs(NuScenesVector):
 
         # Convert list of lane node feats to fixed size numpy array and masks
         lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 6)
-
+        # lane_node_feats ~ [B,N,L,C] B: batch size; N: max_number of lanes (nodes) in the scene; L: max_length of a lane; 
+        # C: channel number for a lane waypoint, which contains x,y location, theta angle, bools inidacting whether the point
+        # locates on 'stop_line', 'ped_crossing' polygons and whether it has successor. 
         map_representation = {
             'lane_node_feats': lane_node_feats,
             'lane_node_masks': lane_node_masks,
@@ -409,6 +411,45 @@ class NuScenesGraphs(NuScenesVector):
 
         agent_node_masks = {'vehicles': vehicle_node_masks, 'pedestrians': ped_node_masks}
         return agent_node_masks
+    
+    @staticmethod
+    def get_target_node_masks(hd_map: Dict, target: Dict, dist_thresh=20) -> Dict:
+        """
+        Returns key/val masks for agent-node attention layers. All agents except those within a distance threshold of
+        the lane node are masked. The idea is to incorporate local agent context at each lane node.
+        """
+
+        lane_node_feats = hd_map['lane_node_feats']
+        lane_node_masks = hd_map['lane_node_masks']
+        past_feats = target['past']
+        past_masks = target['past_masks']
+        fut_feats = target['future']
+        fut_masks = target['future_masks']
+
+        past_node_masks = np.ones((len(lane_node_feats), len(past_feats)))
+        fut_node_masks = np.ones((len(lane_node_feats), len(fut_feats)))
+
+        for i, node_feat in enumerate(lane_node_feats):
+            if (lane_node_masks[i] == 0).any():
+                node_pose_idcs = np.where(lane_node_masks[i][:, 0] == 0)[0]
+                node_locs = node_feat[node_pose_idcs, :2]
+
+                for j, past_feat in enumerate(past_feats):
+                    if (past_masks[j] == 0).any():
+                        past_loc = past_feat[-1, :2]
+                        dist = np.min(np.linalg.norm(node_locs - past_loc, axis=1))
+                        if dist <= dist_thresh:
+                            past_node_masks[i, j] = 0
+
+                for j, fut_feat in enumerate(fut_feats):
+                    if (fut_masks[j] == 0).any():
+                        fut_loc = fut_feat[-1, :2]
+                        dist = np.min(np.linalg.norm(node_locs - fut_loc, axis=1))
+                        if dist <= dist_thresh:
+                            fut_node_masks[i, j] = 0
+
+        target_node_masks = {'past': past_node_masks, 'future': fut_node_masks}
+        return target_node_masks
 
     def visualize_graph(self, node_feats, s_next, edge_type, evf_gt, node_seq, fut_xy):
         """

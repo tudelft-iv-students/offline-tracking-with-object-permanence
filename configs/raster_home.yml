@@ -42,9 +42,10 @@ test_set_args:
   img_size: [488,488]
   random_flips: False
 
-batch_size: 12
-num_workers: 8
+batch_size: 32
+num_workers: 6
 nrow: 4
+use_teacher_force: True
 
 
 
@@ -55,7 +56,7 @@ encoder_args:
   backbone: 'home'
   hidden_dim: 32
   num_heads: 4
-  input_channels: 6
+  input_channels: 7
   traj_forecaster: True
   emb_size: 128
   use_positional_encoding: False
@@ -103,6 +104,8 @@ decoder_args:
   # agg_channel: 32 ##should be same with 'out_channels' in 'aggregator_args', if the aggregator is 2DSampler
   # decoder_depth: 2
   heatmap_channel: 12
+  sampler: 'FDE'
+  num_iter: 2
   output_traj: True
   num_target: 20
   num_heads: 4
@@ -115,6 +118,7 @@ decoder_args:
   map_dim: 512
   pretrain_mlp: False
   use_positional_encoding: False
+  use_attn: True
 # decoder_type: 'home'
 # decoder_args:
 #   agg_type: 'home_agg'
@@ -134,8 +138,8 @@ optim_args:
   scheduler_gamma: 0.5
 
 # Full parameters
-losses: ['focal_loss','min_ade_k','drivable_loss']
-loss_weights: [0.01,0.2,200.0]
+losses: ['focal_loss','min_l1_k']
+loss_weights: [0.5,1.0]
 loss_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -151,7 +155,7 @@ loss_args:
 
 
 
-tr_metrics: ['focal_loss','min_ade_k','drivable_loss','min_fde_k']
+tr_metrics: ['focal_loss','min_ade_k','drivable_loss','min_l1_k']
 tr_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -164,10 +168,10 @@ tr_metric_args:
     only_last: True
   - k: 10
   - type: 'mean'
-  - k: 10
+  - k: 1
 
 
-val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k' , 'min_fde_k']
+val_metrics: ['focal_loss','min_ade_k', 'miss_rate_k','min_ade_k', 'miss_rate_k' , 'min_fde_k', 'min_fde_k']
 val_metric_args:
   - gauss_blur: True
     map_extent: [-61, 61, -22, 100]
@@ -184,6 +188,7 @@ val_metric_args:
   - k: 5
   - k: 5
     dist_thresh: 2
+  - k: 1
   - k: 10
 
 

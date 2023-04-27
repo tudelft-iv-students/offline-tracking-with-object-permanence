@@ -20,9 +20,12 @@ def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True
 
     # String describing dataset type
     ds_type = cfg['dataset'] + '_' + cfg['agent_setting'] + '_' + cfg['input_representation']
-
+    try:
+        helper_type = cfg['helper']
+    except:
+        helper_type = 'normal'
     # Get dataset specific args
-    specific_args = get_specific_args(cfg['dataset'], data_root, cfg['version'] if 'version' in cfg.keys() else None)
+    specific_args = get_specific_args(cfg['dataset'], data_root, cfg['version'] if 'version' in cfg.keys() else None, helper_type)
 
     # Compute stats
     if compute_stats:
@@ -81,6 +84,9 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
             if verbose:
                 print("mini batch " + str(mini_batch_count + 1) + '/' + str(num_mini_batches))
                 mini_batch_count += 1
+    for split in dataset_splits:
+        if split.augment:
+            stats[split.name+"_times"]=split.time_lengths
 
     # Save stats
     filename = os.path.join(dataset_splits[0].data_dir, 'stats.pickle')

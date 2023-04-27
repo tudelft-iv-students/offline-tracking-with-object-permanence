@@ -7,6 +7,7 @@ from nuscenes.eval.common.utils import quaternion_yaw
 from pyquaternion import Quaternion
 from nuscenes.prediction import PredictHelper
 import numpy as np
+import numpy.linalg as LA
 from typing import Dict, Tuple, Union, List
 from shapely.geometry import Point
 from shapely.geometry.polygon import Polygon
@@ -220,8 +221,8 @@ class NuScenesVector(NuScenesTrajectories):
                 'pedestrians': pedestrians
             }
         else:
-            vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.max_vehicles, self.t_h * 2 + 1, 5,False)
-            pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, self.t_h * 2 + 1, 5,False)
+            vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.max_vehicles, self.t_h * 2 + 1, 4,False)
+            pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, self.t_h * 2 + 1, 4,False)
 
             surrounding_agent_representation = {
                 'vehicles': vehicles,
@@ -234,7 +235,7 @@ class NuScenesVector(NuScenesTrajectories):
             img = self.agent_rasterizer.make_representation(i_t, s_t)
             img = np.moveaxis(img, -1, 0)
             img = img.astype(float) / 255
-        surrounding_agent_representation['image']=img
+            surrounding_agent_representation['image']=img
 
         return surrounding_agent_representation
 
@@ -365,7 +366,7 @@ class NuScenesVector(NuScenesTrajectories):
         return agent_list
 
     def discard_poses_outside_extent(self, pose_set: List[np.ndarray],
-                                     ids: List[str] = None) -> Union[List[np.ndarray],
+                                     ids: List[str] = None, radius = None) -> Union[List[np.ndarray],
                                                                      Tuple[List[np.ndarray], List[str]]]:
         """
         Discards lane or agent poses outside predefined extent in target agent's frame of reference.
@@ -381,7 +382,9 @@ class NuScenesVector(NuScenesTrajectories):
             for n, pose in enumerate(poses):
                 if self.map_extent[0] <= pose[0] <= self.map_extent[1] and \
                         self.map_extent[2] <= pose[1] <= self.map_extent[3]:
-                    flag = True
+                    if radius is None or LA.norm(pose[:2],ord=2)<radius:
+                        flag = True
+                        break
 
             if flag:
                 updated_pose_set.append(poses)
@@ -499,7 +502,7 @@ class NuScenesVector(NuScenesTrajectories):
 
     @staticmethod
     def list_to_tensor(feat_list: List[np.ndarray], max_num: int, max_len: int,
-                       feat_size: int,use_home: bool) -> Tuple[np.ndarray, np.ndarray]:
+                       feat_size: int,use_home = False) -> Tuple[np.ndarray, np.ndarray]:
         """
         Converts a list of sequential features (e.g. lane polylines or agent history) to fixed size numpy arrays for
         forming mini-batches

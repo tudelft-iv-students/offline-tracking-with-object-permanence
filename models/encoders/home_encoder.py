@@ -143,7 +143,8 @@ class HomeEncoder(PredictionEncoder):
         map_representation = inputs['map_representation']['image']
         
         # Apply Conv layers
-        rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1).type(torch.float32)
+        # rasterized_input = torch.cat((map_representation, surrounding_agent_representation), dim=1).type(torch.float32)
+        rasterized_input = torch.cat((map_representation, surrounding_agent_representation,inputs['map_representation']['mask'].unsqueeze(1)), dim=1).type(torch.float32)
         context_encoding = self.backbone(rasterized_input)
 
         # Add positional encoding
@@ -157,6 +158,8 @@ class HomeEncoder(PredictionEncoder):
         # Target agent encoding
         if self.traj_forecaster:
             traj_feat=self.target_traj_encoder(target_agent_representation[:,-1,2:-2])
+        else:
+            traj_feat=target_agent_representation
         agent_tracks_full = agent_representation.view(-1,agent_representation.shape[-2],agent_representation.shape[-1]).transpose(-1,-2) 
         agent_masks = get_track_mask(agent_representation)
         target_track= target_agent_representation.transpose(-1,-2)
@@ -212,16 +215,35 @@ class Home_social_enocder(nn.Module):
         return self.normalizer(target_agent_enc)
 
 class Home_conv(nn.Module):
-    def __init__(self, input_channels=6):
+    def __init__(self, input_channels=7):
         super(Home_conv, self).__init__()
-        self.conv_layers=nn.Sequential(
-            CNNBlock(in_channels=input_channels, out_channels=32,kernel_size=3,stride=2,padding=1),
-            CNNBlock(in_channels=32, out_channels=64,kernel_size=3,stride=2,padding=1),
-            CNNBlock(in_channels=64, out_channels=128,kernel_size=3,stride=1,padding=1),
-            CNNBlock(in_channels=128, out_channels=256,kernel_size=3,stride=2,padding=1),
-            CNNBlock(in_channels=256, out_channels=512,kernel_size=3,stride=2,padding=1)
+        self.conv_layers=nn.ModuleList(
+            [CNNBlock(in_channels=input_channels, out_channels=32,kernel_size=3,stride=1,padding=0),
+            CNNBlock(in_channels=32, out_channels=64,kernel_size=3,stride=1,padding=1),
+            CNNBlock(in_channels=64, out_channels=128,kernel_size=3,stride=1,padding=0),
+            CNNBlock(in_channels=128, out_channels=256,kernel_size=3,stride=1,padding=1),
+            CNNBlock(in_channels=256, out_channels=512,kernel_size=3,stride=1,padding=1)]
         )
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
 
     def forward(self,raster_img):
+        x=raster_img
+        for layer in self.conv_layers[:-1]:
+            x=self.pool(layer(x))
+        x=self.conv_layers[-1](x)
+        return x
+
+# class Home_conv(nn.Module):
+#     def __init__(self, input_channels=6):
+#         super(Home_conv, self).__init__()
+#         self.conv_layers=nn.Sequential(
+#             CNNBlock(in_channels=input_channels, out_channels=32,kernel_size=3,stride=2,padding=1),
+#             CNNBlock(in_channels=32, out_channels=64,kernel_size=3,stride=2,padding=1),
+#             CNNBlock(in_channels=64, out_channels=128,kernel_size=3,stride=1,padding=1),
+#             CNNBlock(in_channels=128, out_channels=256,kernel_size=3,stride=2,padding=1),
+#             CNNBlock(in_channels=256, out_channels=512,kernel_size=3,stride=2,padding=1)
+#         )
+
+#     def forward(self,raster_img):
         
-        return self.conv_layers(raster_img)
+#         return self.conv_layers(raster_img)
