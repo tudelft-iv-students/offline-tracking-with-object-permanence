@@ -23,7 +23,7 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=18gb
+#SBATCH --mem=24gb
 
 # Request a GPU
 #SBATCH --gres=gpu:v100:1
@@ -49,10 +49,8 @@ conda activate pgp
 cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 
 # Computations should be started with 'srun'. For example:
-# srun python train.py -c configs/ram.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_ram/ -w ./output/pretrain/checkpoints/1.tar -n 1
-# srun python train.py -c configs/raster_home.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_less_overfit/ -w ./output/test_less_overfit/checkpoints/8.tar -n 3
-# srun python train.py -c configs/raster.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_heatmap/ -w ./output/test_heatmap/checkpoints/5.tar -n 1
-srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/no_map/ -n 15 -w ./output/test_occ/ugru/no_map/checkpoints/9.tar
+
+srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/use_mid_origin_pretrain_new/ -n 23 -w output/test_occ/ugru/use_mid_origin_pretrain_new/checkpoints/26.tar
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 

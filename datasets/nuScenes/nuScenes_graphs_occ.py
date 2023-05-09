@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
 from nuscenes.prediction.input_representation.static_layers import color_by_yaw
+from nuscenes.prediction.input_representation.static_layers import correct_yaw
 from pyquaternion import Quaternion
 from nuscenes.eval.common.utils import quaternion_yaw
 from nuscenes.map_expansion.map_api import NuScenesMap
@@ -10,6 +11,7 @@ from typing import Dict, Tuple, Union, List
 from scipy.spatial.distance import cdist
 from numpy import random
 from numpy import linalg as LA
+import numpy.ma as ma
 import os
 
 
@@ -18,7 +20,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
     NuScenes dataset class for single agent prediction, using the graph representation from PGP for maps and agents
     """
 
-    def __init__(self, mode: str, data_dir: str, args: Dict,helper: PredictHelper_occ ):
+    def __init__(self, mode: str, data_dir: str, args: Dict, helper: PredictHelper_occ ):
         """
         Initialize predict helper, agent and scene representations
         :param mode: Mode of operation of dataset, one of {'compute_stats', 'extract_data', 'load_data'}
@@ -30,7 +32,8 @@ class NuScenesGraphs_OCC(NuScenesVector):
         self.name=args['split_name']
         self.traversal_horizon = args['traversal_horizon']
         self.augment=args['augment']
-        self.map_radius_buffer=15
+        self.map_radius_buffer=10
+        self.use_mid_origin=args['use_mid_origin']
         
         
         if self.augment:
@@ -42,7 +45,10 @@ class NuScenesGraphs_OCC(NuScenesVector):
             self.deprecate_percent=args['dep_percent']
             self.traj_mask_prob=args['traj_mask_prob']
             self.init_time_lengths(args)
-            self.add_reverse_gt=True
+            self.add_reverse_gt=False
+            self.random_rots=args['random_rots']
+            if self.random_rots:
+                self.rdm_rot_prob=args['rdm_rot_prob']
 
         # Load dataset stats (max nodes, max agents etc.)
         if self.mode == 'extract_data':
@@ -81,9 +87,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
         Function to compute statistics for a given data point
         """     
         if self.augment:
-            map_radius = self.get_target_agent_representation(idx,self.time_lengths[idx])
-            num_vehicles, num_pedestrians = self.get_surrounding_agent_representation(idx, self.time_lengths[idx],radius=map_radius+self.map_radius_buffer)
-            num_lane_nodes, max_nbr_nodes = self.get_map_representation(idx,map_radius)
+            map_radius,origin = self.get_target_agent_representation(idx,self.time_lengths[idx])
+            num_vehicles, num_pedestrians = self.get_surrounding_agent_representation(idx, self.time_lengths[idx],radius=map_radius+self.map_radius_buffer,origin=origin)
+            num_lane_nodes, max_nbr_nodes = self.get_map_representation(idx,map_radius+self.map_radius_buffer,origin)
         else:
             map_radius = self.get_target_agent_representation(idx,self.time_lengths[idx])
             num_lane_nodes, max_nbr_nodes = self.get_map_representation(idx,map_radius)
@@ -115,19 +121,29 @@ class NuScenesGraphs_OCC(NuScenesVector):
 
     def get_inputs(self, idx: int) -> Dict:
         i_t, s_t = self.token_list[idx].split("_")
-        target_agent_representation,ground_truth,map_radius = self.get_target_agent_representation(idx,self.time_lengths[idx])
-        surrounding_agent_representation = self.get_surrounding_agent_representation(idx,self.time_lengths[idx],radius=map_radius+self.map_radius_buffer)
-        map_representation = self.get_map_representation(idx,radius=map_radius)
+        target_agent_representation,ground_truth,map_radius,origin = self.get_target_agent_representation(idx,self.time_lengths[idx])
+        surrounding_agent_representation = self.get_surrounding_agent_representation(idx,self.time_lengths[idx],radius=map_radius+self.map_radius_buffer,origin=origin)
+        map_representation = self.get_map_representation(idx,radius=map_radius+self.map_radius_buffer,origin=origin)
+        map_representation = self.add_lane_ctrs(map_representation)
         inputs = {'instance_token': i_t,
                   'sample_token': s_t,
                   'map_representation': map_representation,
                   'surrounding_agent_representation': surrounding_agent_representation,
-                  'target_agent_representation': target_agent_representation}
+                  'target_agent_representation': target_agent_representation,
+                  'origin': np.asarray(origin)}
         a_n_masks_agnt = self.get_agent_node_masks(inputs['map_representation'], inputs['surrounding_agent_representation'])
-        a_n_masks_trgt = self.get_target_node_masks(inputs['map_representation'], inputs['target_agent_representation'])
-        inputs['agent_node_masks'] = {'agent':a_n_masks_agnt,'target':a_n_masks_trgt}
+        # a_n_masks_trgt = self.get_target_node_masks(inputs['map_representation'], inputs['target_agent_representation'])
+        inputs['agent_node_masks'] = {'agent':a_n_masks_agnt}
         # inputs['agent_node_masks'] = {'agent':a_n_masks_agnt}
         return inputs,ground_truth
+    def add_lane_ctrs(self,map_representation):
+        encodings=map_representation['lane_node_feats']
+        mask=map_representation['lane_node_masks']
+        lane_ctrs=(ma.masked_array(encodings[:,:,:2],mask=mask[:,:,:2])).mean(axis=1).data
+        lane_ctrs[(~(((1-mask).astype(np.bool))[:,:,:2].any(1)))]=np.inf
+        map_representation['lane_ctrs']=lane_ctrs
+        return map_representation
+
     def get_target_agent_representation(self, idx: int, time: float) :
         """
         Extracts target agent representation
@@ -135,60 +151,84 @@ class NuScenesGraphs_OCC(NuScenesVector):
         :return hist: track history for target agent, shape: [t_h * 2, 5]
         """
         i_t, s_t = self.token_list[idx].split("_")
-        origin = self.get_target_agent_global_pose(idx)
+        global_pose = self.get_target_agent_global_pose(idx)
+        sample_annotation = self.helper.get_sample_annotation(i_t, s_t)
+        yaw = quaternion_yaw(Quaternion(sample_annotation['rotation']))
         # Get future information
         coords_fut,global_yaw_fut,time_fut = self.helper.get_future_for_agent(i_t, s_t, seconds=self.t_h+time, in_agent_frame=False,add_yaw_and_time=True)
         sep_idx= np.searchsorted(time_fut, time-0.1)
         future_rec=np.empty([0,4])
         concat_future=np.empty([0,5])
         count=0
+        endpoint_time=time_fut[sep_idx]
         for xy,r,t in zip(coords_fut[sep_idx:],global_yaw_fut[sep_idx:],time_fut[sep_idx:]):
-            if random.random()<self.traj_mask_prob and count>=1:
+            if random.random()<self.traj_mask_prob and count>=1 and self.mode=='extract_data':
                 continue
-            if self.add_reverse_gt and count==0:
-                origin_fut=(xy[0], xy[1], quaternion_yaw(Quaternion(r)))
+            if count==0:
+                origin_fut=(xy[0], xy[1], correct_yaw(quaternion_yaw(Quaternion(r))))
+                if self.use_mid_origin:
+                    origin=(np.asarray(global_pose)+np.asarray(origin_fut))/2
+                    if self.random_rots:
+                        if random.random()<self.rdm_rot_prob:
+                            rot_rad=(random.random()-0.5)*np.pi*2
+                            origin[-1]+=rot_rad
+                            
+                    origin=tuple(origin)   
+                    origin_fut=origin
             local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
             future_rec=np.concatenate((future_rec,np.asarray([local_pose.__add__((t,))])),0)
             concat_future=np.concatenate((concat_future,np.asarray([local_pose.__add__((t,1))])),0)
             count+=1
+            
         future=[future_rec[::-1]]
         map_radius = LA.norm(future_rec[-1,:2],ord=2)
         if self.mode == "compute_stats":
-            return max(map_radius,50)
+            return max(map_radius,25),origin
 
         # x, y co-ordinates in agent's frame of reference
         coords,global_yaw,time_past = self.helper.get_past_for_agent(i_t, s_t, seconds=self.t_h, in_agent_frame=False,add_yaw_and_time=True)
-
-        past_hist=np.zeros([1,4])
-        concat_hist=np.zeros([1,5])
+        global_pose=global_pose[:-1].__add__((yaw,))
+        past_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((0,))])
+        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((0,0))])
+        count=0
         for xy,r,t in zip(coords,global_yaw,time_past):
-            if random.random()<self.traj_mask_prob:
+            
+            if random.random()<self.traj_mask_prob and self.mode=='extract_data':
                 continue
             local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
             past_hist=np.concatenate((past_hist,np.asarray([local_pose.__add__((-t,))])),0)
             concat_hist=np.concatenate((concat_hist,np.asarray([local_pose.__add__((-t,0))])),0)
+            count+=1
         # Zero pad for track histories shorter than t_h
         hist=[past_hist[::-1]]
         
-        concat_motion=[np.concatenate((concat_hist[::-1],concat_future),axis=0)]
+        concat_motion=[np.concatenate((concat_hist[::-1],concat_future),axis=0)]        
+        endpts_query=np.concatenate((np.zeros([1,2]),np.array([[endpoint_time,1.0]])),0)    
+        endpts_gt =  np.concatenate(([np.asarray(self.global_to_local(origin, global_pose))],
+                                    [np.asarray(self.global_to_local(origin, (coords_fut[sep_idx][0], coords_fut[sep_idx][1], 
+                                                                             quaternion_yaw(Quaternion(global_yaw_fut[sep_idx])))))]),0)   
         
         gt_poses=np.empty([0,3])
-        gt_rev=np.empty([0,3])
         time_query=np.empty([0,2])
         for xy,r,t in zip(coords_fut[:sep_idx],global_yaw_fut[:sep_idx],time_fut[:sep_idx]):
             local_pose = np.asarray([self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))])
             gt_poses= np.concatenate((gt_poses,local_pose),0)
-            time_query=np.concatenate((np.array([[t,t/time]]),time_query),0)
-            if self.add_reverse_gt:
-                local_pose_rev = np.asarray([self.global_to_local(origin_fut, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))])
-                gt_rev= np.concatenate((gt_rev,local_pose_rev),0)
-
-        
+            time_query=np.concatenate((np.array([[t,t/endpoint_time]]),time_query),0)
+            # if self.add_reverse_gt:
+            #     local_pose_rev = np.asarray([self.global_to_local(origin_fut, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))])
+            #     gt_rev= np.concatenate((gt_rev,local_pose_rev),0)
+        dummy_vals=np.ones([len(time_query),4])*np.inf
+        dummy_vals[:,-1]=time_fut[:sep_idx]
+        concat_refine_input=[np.concatenate((past_hist[::-1],dummy_vals,future_rec),axis=0)]
         time_query, time_query_masks = self.list_to_tensor([time_query], 1, int((self.t_f-2) * 2 + 1), 2,False)
-        query={'query':np.squeeze(time_query,0),'mask':np.squeeze(time_query_masks,0)}
+        query={'query':np.squeeze(time_query,0),'mask':np.squeeze(time_query_masks,0),'endpoints':endpts_query}
         gt_poses, gt_poses_masks = self.list_to_tensor([gt_poses], 1, int((self.t_f-2) * 2 + 1), 3,False)
-        gt_rev, _ = self.list_to_tensor([gt_rev], 1, int((self.t_f-2) * 2 + 1), 3,False)
-        ground_truth={'traj':np.squeeze(gt_poses,0),'mask':np.squeeze(gt_poses_masks,0),'traj_rev':np.squeeze(gt_rev,0)}
+        concat_refine_input, concat_refine_mask = self.list_to_tensor(concat_refine_input, 1, 
+                                                                      int((self.t_f-2) * 2 + 1)+int(self.t_h * 2 + 1)*2, 4,False)
+        # gt_rev, _ = self.list_to_tensor([gt_rev], 1, int((self.t_f-2) * 2 + 1), 3,False)
+        ground_truth={'traj':np.squeeze(gt_poses,0),'mask':np.squeeze(gt_poses_masks,0),'endpoints':endpts_gt}
+        # if self.add_reverse_gt:
+        #     ground_truth['traj_rev']=np.squeeze(gt_rev,0)
         hist, hist_masks = self.list_to_tensor(hist, 1, int(self.t_h * 2 + 1), 4,False)
         future, future_masks = self.list_to_tensor(future, 1, int(self.t_h * 2 + 1), 4,False)
         concat_motion, concat_masks = self.list_to_tensor(concat_motion, 1, int(self.t_h * 2 + 1)*2, 5,False)
@@ -196,8 +236,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
         history={'traj':np.squeeze(hist,0),'mask':np.squeeze(hist_masks,0)}
         future={'traj':np.squeeze(future,0),'mask':np.squeeze(future_masks,0)}
         concat={'traj':np.squeeze(concat_motion,0),'mask':np.squeeze(concat_masks,0)}
-        target_representation={'history':history,'future':future,'concat_motion':concat,'time_query':query}
-        return target_representation,ground_truth,max(map_radius,50)
+        refine_input={'traj':np.squeeze(concat_refine_input,0),'mask':np.squeeze(concat_refine_mask,0)}
+        target_representation={'history':history,'future':future,'concat_motion':concat,'time_query':query,'refine_input':refine_input}
+        return target_representation,ground_truth,max(map_radius,25),origin
 
     def get_lanes_around_agent(self, global_pose: Tuple[float, float, float], map_api: NuScenesMap, radius=None) -> Dict:
         """
@@ -234,7 +275,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
 
         return polygons
     
-    def get_map_representation(self, idx: int, radius) -> Union[Tuple[int, int], Dict]:
+    def get_map_representation(self, idx: int, radius: float, origin: Tuple=None) -> Union[Tuple[int, int], Dict]:
         """
         Extracts map representation
         :param idx: data index
@@ -246,7 +287,11 @@ class NuScenesGraphs_OCC(NuScenesVector):
         map_api = self.maps[map_name]
 
         # Get agent representation in global co-ordinates
-        global_pose = self.get_target_agent_global_pose(idx)
+        if origin is None:
+            global_pose = self.get_target_agent_global_pose(idx)
+        else: 
+            global_pose = origin
+            
 
         # Get lanes around agent within map_extent
         lanes = self.get_lanes_around_agent(global_pose, map_api,radius=radius)
@@ -258,7 +303,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
         lane_node_feats, lane_ids = self.get_lane_node_feats(global_pose, lanes, polygons)
 
         # Discard lanes outside map extent
-        lane_node_feats, lane_ids = self.discard_poses_outside_extent(lane_node_feats, lane_ids)
+        lane_node_feats, lane_ids = self.discard_poses_outside_extent(lane_node_feats, lane_ids,radius=radius)
 
         # Get edges: mapping index to successor or proximal lanes 
         e_succ = self.get_successor_edges(lane_ids, map_api)
@@ -298,7 +343,37 @@ class NuScenesGraphs_OCC(NuScenesVector):
         }
 
         return map_representation
-    def get_surrounding_agent_representation(self, idx: int, time: float, radius=None) -> \
+    
+    def discard_poses_outside_extent(self, pose_set: List[np.ndarray],
+                                    ids: List[str] = None, radius = None) -> Union[List[np.ndarray],
+                                                                    Tuple[List[np.ndarray], List[str]]]:
+        """
+        Discards lane or agent poses outside predefined extent in target agent's frame of reference.
+        :param pose_set: agent or lane polyline poses
+        :param ids: annotation record tokens for pose_set. Only applies to lanes.
+        :return: Updated pose set
+        """
+        updated_pose_set = []
+        updated_ids = []
+
+        for m, poses in enumerate(pose_set):
+            flag = False
+            for n, pose in enumerate(poses):
+                if LA.norm(pose[:2],ord=2)<radius:
+                    flag = True
+                    break
+
+            if flag:
+                updated_pose_set.append(poses)
+                if ids is not None:
+                    updated_ids.append(ids[m])
+
+        if ids is not None:
+            return updated_pose_set, updated_ids
+        else:
+            return updated_pose_set
+    
+    def get_surrounding_agent_representation(self, idx: int, time: float, radius=None, origin=None) -> \
             Union[Tuple[int, int], Dict]:
         """
         Extracts surrounding agent representation
@@ -308,8 +383,8 @@ class NuScenesGraphs_OCC(NuScenesVector):
 
         # Get vehicles and pedestrian histories for current sample
         
-        vehicles = self.get_agents_of_type(idx, 'vehicle', time)
-        pedestrians = self.get_agents_of_type(idx, 'human', time)
+        vehicles = self.get_agents_of_type(idx, 'vehicle', time, origin)
+        pedestrians = self.get_agents_of_type(idx, 'human', time, origin)
 
         # Discard poses outside map extent
         vehicles = self.discard_poses_outside_extent(vehicles,radius=radius)
@@ -346,7 +421,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
             surrounding_agent_representation['image']=img
 
         return surrounding_agent_representation
-    def get_agents_of_type(self, idx: int, agent_type: str, time: float) -> List[np.ndarray]:
+    def get_agents_of_type(self, idx: int, agent_type: str, time: float, origin=None) -> List[np.ndarray]:
         """
         Returns surrounding agents of a particular class for a given sample
         :param idx: data index
@@ -356,7 +431,8 @@ class NuScenesGraphs_OCC(NuScenesVector):
         i_t, s_t = self.token_list[idx].split("_")
 
         # Get agent representation in global co-ordinates
-        origin = self.get_target_agent_global_pose(idx)
+        if origin is None:
+            origin = self.get_target_agent_global_pose(idx)
 
         # Load all agents for sample
         agent_details = self.helper.get_future_for_sample(s_t, seconds=time, in_agent_frame=False, just_xy=False)
@@ -393,7 +469,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
             agent['yaw']=[]
             agent['time']=[]
             for n, pose in enumerate(agent['coords']):
-                if random.random()<self.traj_mask_prob and n>=1:
+                if random.random()<self.traj_mask_prob and n>=1 and self.mode=='extract_data':
                     continue
                 local_pose = self.global_to_local(origin, (pose[0], pose[1], quaternion_yaw(Quaternion(agent['rotation'][n]))))
                 agent['xy_coords'].append([local_pose[0], local_pose[1]])
@@ -747,54 +823,4 @@ class NuScenesGraphs_OCC(NuScenesVector):
 
         return target_masks
 
-    def visualize_graph(self, node_feats, s_next, edge_type, evf_gt, node_seq, fut_xy):
-        """
-        Function to visualize lane graph.
-        """
-        fig, ax = plt.subplots()
-        ax.imshow(np.zeros((3, 3)), extent=self.map_extent, cmap='gist_gray')
 
-        # Plot edges
-        for src_id, src_feats in enumerate(node_feats):
-            feat_len = np.sum(np.sum(np.absolute(src_feats), axis=1) != 0)
-
-            if feat_len > 0:
-                src_x = np.mean(src_feats[:feat_len, 0])
-                src_y = np.mean(src_feats[:feat_len, 1])
-
-                for idx, dest_id in enumerate(s_next[src_id]):
-                    edge_t = edge_type[src_id, idx]
-                    visited = evf_gt[src_id, idx]
-                    if 3 > edge_t > 0:
-
-                        dest_feats = node_feats[int(dest_id)]
-                        feat_len_dest = np.sum(np.sum(np.absolute(dest_feats), axis=1) != 0)
-                        dest_x = np.mean(dest_feats[:feat_len_dest, 0])
-                        dest_y = np.mean(dest_feats[:feat_len_dest, 1])
-                        d_x = dest_x - src_x
-                        d_y = dest_y - src_y
-
-                        line_style = '-' if edge_t == 1 else '--'
-                        width = 2 if visited else 0.01
-                        alpha = 1 if visited else 0.5
-
-                        plt.arrow(src_x, src_y, d_x, d_y, color='w', head_width=0.1, length_includes_head=True,
-                                  linestyle=line_style, width=width, alpha=alpha)
-
-        # Plot nodes
-        for node_id, node_feat in enumerate(node_feats):
-            feat_len = np.sum(np.sum(np.absolute(node_feat), axis=1) != 0)
-            if feat_len > 0:
-                visited = node_id in node_seq
-                x = np.mean(node_feat[:feat_len, 0])
-                y = np.mean(node_feat[:feat_len, 1])
-                yaw = np.arctan2(np.mean(np.sin(node_feat[:feat_len, 2])),
-                                 np.mean(np.cos(node_feat[:feat_len, 2])))
-                c = color_by_yaw(0, yaw)
-                c = np.asarray(c).reshape(-1, 3) / 255
-                s = 200 if visited else 50
-                ax.scatter(x, y, s, c=c)
-
-        plt.plot(fut_xy[:, 0], fut_xy[:, 1], color='r', lw=3)
-
-        plt.show()

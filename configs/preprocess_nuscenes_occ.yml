@@ -1,11 +1,11 @@
 dataset: 'nuScenes'
-version: 'v1.0-trainval'
+version: 'v1.0-mini'
 agent_setting: 'single_agent'
 input_representation: 'graphs_occ'
 helper: 'occ'
 
 train_set_args:
-  split: 'train'
+  split: 'mini_train'
   t_h: 2
   t_f: 18.5
   split_name: 'train'
@@ -22,10 +22,13 @@ train_set_args:
   dep_thresh: 12
   dep_percent: 0.75
   traj_mask_prob: 0.2
+  use_mid_origin: True
+  random_rots: True
+  rdm_rot_prob: 0.4
 
 
 val_set_args:
-  split: 'train_val'
+  split: 'mini_val'
   t_h: 2
   t_f: 18.5
   split_name: 'val'
@@ -42,9 +45,11 @@ val_set_args:
   dep_thresh: 9
   dep_percent: 0.75
   traj_mask_prob: 0.2
+  use_mid_origin: True
+  random_rots: False
 
 test_set_args:
-  split: 'val'
+  split: 'mini_val'
   t_h: 2
   t_f: 18.5
   use_home: False
@@ -62,6 +67,8 @@ test_set_args:
   dep_thresh: 9
   dep_percent: 0.75
   traj_mask_prob: 0.2
+  use_mid_origin: True
+  random_rots: False
 
 batch_size: 36
 num_workers: 12

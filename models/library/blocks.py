@@ -7,7 +7,7 @@ from torch import Tensor
 from typing import List
 import torch
 from math import gcd
-
+from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 
 IntTuple = Union[Tuple[int], int]
 def get_track_mask(agent_representation):
@@ -276,6 +276,31 @@ class CoordConv(nn.Module):
         ret = self.addcoords(x)
         ret = self.conv(ret)
         return ret
+    
+class Linear(nn.Module):
+    def __init__(self, n_in, n_out, norm='GN', ng=32, act=True):
+        super(Linear, self).__init__()
+        assert(norm in ['GN', 'BN', 'SyncBN'])
+
+        self.linear = nn.Linear(n_in, n_out, bias=False)
+        
+        if norm == 'GN':
+            self.norm = nn.GroupNorm(gcd(ng, n_out), n_out)
+        elif norm == 'BN':
+            self.norm = nn.BatchNorm1d(n_out)
+        else:
+            exit('SyncBN has not been added!')
+        
+        self.relu = nn.ReLU(inplace=True)
+        self.act = act
+
+    def forward(self, x):
+        out = self.linear(x)
+        out = self.norm(out)
+        if self.act:
+            out = self.relu(out)
+        return out
+    
 class Att(nn.Module):
     """
     Attention block to pass context nodes information to target nodes
@@ -304,7 +329,7 @@ class Att(nn.Module):
         self.linear = Linear(n_agt, n_agt, norm=norm, ng=ng, act=False)
         self.relu = nn.ReLU(inplace=True)
 
-    def forward(self, agts: Tensor, agt_idcs: List[Tensor], agt_ctrs: List[Tensor], ctx: Tensor, ctx_idcs: List[Tensor], ctx_ctrs: List[Tensor], dist_th: float) -> Tensor:
+    def forward(self, agts: Tensor, agt_idcs: List[Tensor], agt_ctrs: List[Tensor], ctx: Tensor, ctx_idcs: List[Tensor], ctx_ctrs: List[Tensor], dist_th: float, agt_mask:List[Tensor]= None, ctx_mask : List[Tensor]=None) -> Tensor:
         res = agts
         if len(ctx) == 0:
             agts = self.agt(agts)
@@ -321,9 +346,18 @@ class Att(nn.Module):
             dist = agt_ctrs[i].view(-1, 1, 2) - ctx_ctrs[i].view(1, -1, 2)
             dist = torch.sqrt((dist ** 2).sum(2))
             mask = dist <= dist_th
+            if agt_mask is not None:
+                agt_sub_mask=~((agt_mask[i].reshape(-1,1).repeat(1,mask.shape[1])).bool())
+                mask=mask*agt_sub_mask
+            if ctx_mask is not None:
+                cxt_sub_mask=~((ctx_mask[i].reshape(1,-1).repeat(mask.shape[0],1)).bool())
+                mask=mask*cxt_sub_mask
 
             idcs = torch.nonzero(mask, as_tuple=False)
+            
             if len(idcs) == 0:
+                hi_count += len(agt_idcs[i])
+                wi_count += len(ctx_idcs[i])
                 continue
 
             hi.append(idcs[:, 0] + hi_count)
@@ -353,3 +387,28 @@ class Att(nn.Module):
         agts += res
         agts = self.relu(agts)
         return agts
+    
+def node_gru_enc(masks: Tensor,node_embedding: Tensor, gru: nn.GRU):
+    masks_for_batching = ~masks[:, :, :, 0].bool()
+    masks_for_batching = masks_for_batching.any(dim=-1).unsqueeze(2).unsqueeze(3)
+    feat_embedding_batched = torch.masked_select(node_embedding, masks_for_batching)# select the feature from actual lane nodes and get rid of padded placeholder
+    feat_embedding_batched = feat_embedding_batched.view(-1, node_embedding.shape[2],node_embedding.shape[3])
+    seq_lens = torch.sum(1 - masks[:, :, :, 0], dim=-1)
+    seq_lens_batched = seq_lens[seq_lens != 0].cpu()
+    if len(seq_lens_batched) != 0:
+        feat_embedding_packed = pack_padded_sequence(feat_embedding_batched, seq_lens_batched,
+                                                            batch_first=True, enforce_sorted=False)
+        hidden_batched, _ = gru(feat_embedding_packed)
+        hidden_unpacked, _ = pad_packed_sequence(hidden_batched, batch_first=True,total_length=masks.shape[2])
+        masks_for_scattering = masks_for_batching.repeat(1, 1, hidden_unpacked.shape[-2],hidden_unpacked.shape[-1])
+        encoding = torch.zeros(masks_for_scattering.shape,device=node_embedding.device)
+        node_enc = encoding.masked_scatter(masks_for_scattering, hidden_unpacked)
+    else:
+        batch_size = node_embedding.shape[0]
+        max_num = node_embedding.shape[1]
+        max_len = node_embedding.shape[2]
+        hidden_state_size = gru.hidden_size
+        if gru.bidirectional:
+            hidden_state_size*=2
+        encoding = torch.zeros((batch_size, max_num, max_len, hidden_state_size), device=node_embedding.device)
+    return node_enc

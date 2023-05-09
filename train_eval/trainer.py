@@ -6,12 +6,13 @@ from train_eval.initialization import initialize_prediction_model, initialize_me
 import torch
 import time
 import math
-import os
+
 import train_eval.utils as u
 from torchvision.utils import make_grid
 from models.decoders.ram_decoder import get_index,get_dense
 import os
 from metrics.focal_loss import FocalLoss
+from datasets.nuScenes.prediction import PredictHelper_occ
 # os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
 # os.environ['CUDA_VISIBLE_DEVICES'] = "1"
 # os.environ["MKL_NUM_THREADS"] = "6"
@@ -43,7 +44,8 @@ class Trainer:
         train_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['train_set_args']] + spec_args)
         val_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['val_set_args']] + spec_args)
         datasets = {'train': train_set, 'val': val_set}
-        self.pretrain_mlp = cfg['decoder_args']['pretrain_mlp']
+        self.pretrain = cfg['pretrain']
+
         # Initialize dataloaders
         self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
                                            num_workers=cfg['num_workers'], pin_memory=True)
@@ -54,8 +56,8 @@ class Trainer:
         self.model = initialize_prediction_model(cfg['encoder_type'], cfg['aggregator_type'], cfg['decoder_type'],
                                                  cfg['encoder_args'], cfg['aggregator_args'], cfg['decoder_args'])
         self.model = self.model.float().to(device)
-        self.model.aggregator.pretrain_mlp = self.pretrain_mlp 
-        self.model.decoder.pretrain_mlp = self.pretrain_mlp 
+        # self.model.aggregator.pretrain_mlp = self.pretrain_mlp 
+        # self.model.decoder.pretrain_mlp = self.pretrain_mlp 
 
         # Initialize optimizer and scheduler
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=cfg['optim_args']['lr'])
@@ -68,6 +70,13 @@ class Trainer:
         # Initialize losses
         self.losses = [initialize_metric(cfg['losses'][i], cfg['loss_args'][i]) for i in range(len(cfg['losses']))]
         self.loss_weights = cfg['loss_weights']
+        if self.pretrain:
+            self.pretrain_epcs = cfg['pretrain_epcs']
+            self.activated_losses=[]
+            self.activated_loss_weights=[]
+        else:
+            self.activated_losses = self.losses
+            self.activated_loss_weights=self.loss_weights
         self.use_teacher_force =cfg['use_teacher_force']
 
         # Initialize metrics
@@ -79,12 +88,15 @@ class Trainer:
         self.min_val_metric = math.inf
 
         # Print metrics after these many minibatches to keep track of training
-        self.add_img=True
+        self.add_img=False
         self.log_period = len(self.tr_dl)//cfg['log_freq']
-        self.add_img_freq=100
+        self.add_img_period=len(self.tr_dl)//3
+        
         if self.add_img:
-            self.focal=FocalLoss(cfg['focal_args'])
-            self.nrow=cfg['nrow']
+            self.visualize_start_epoch=cfg['visualize_start_epoch']
+            self.vis_helpers={'train':PredictHelper_occ(self.tr_dl.dataset.helper.data),
+                              'val':PredictHelper_occ(self.val_dl.dataset.helper.data)}
+
 
         # Initialize tensorboard writer
         self.writer = writer
@@ -120,6 +132,31 @@ class Trainer:
             self.current_epoch = epoch
             print()
             print('Epoch (' + str(self.current_epoch + 1) + '/' + str(start_epoch + num_epochs) + ')')
+            if self.pretrain:
+                if self.current_epoch  < self.pretrain_epcs:
+                    for i,loss in enumerate(self.losses):
+                        if loss.target!='refine':
+                            self.activated_losses.append(loss)
+                            self.activated_loss_weights.append(self.loss_weights[i])
+                    for tr_metric in self.train_metrics:
+                        if tr_metric.target == 'refine':
+                            tr_metric.target = 'initial'
+                            tr_metric.name=tr_metric.name.split('_')[0]+'_initial'
+                    for val_metric in self.val_metrics:
+                        if val_metric.target == 'refine':
+                            val_metric.target = 'initial'
+                            val_metric.name=val_metric.name.split('_')[0]+'_initial'
+                else:
+                    self.activated_losses = self.losses
+                    self.activated_loss_weights = self.loss_weights
+                    for tr_metric in self.train_metrics:
+                        if tr_metric.target == 'initial':
+                            tr_metric.target = 'refine'
+                            tr_metric.name=tr_metric.name.split('_')[0]+'_refine'
+                    for val_metric in self.val_metrics:
+                        if val_metric.target == 'initial':
+                            val_metric.target = 'refine'
+                            val_metric.name=val_metric.name.split('_')[0]+'_refine'
             if self.use_teacher_force:
                 self.model.aggregator.teacher_force = True
                 self.model.decoder.teacher_force = True
@@ -134,30 +171,25 @@ class Trainer:
             self.model.aggregator.teacher_force = False
             self.model.decoder.teacher_force = False
             self.teacher_force = False
-            # with torch.no_grad():
-            #     train_epoch_metrics = self.run_epoch('selection', self.tr_dl)
-            # self.print_metrics(train_epoch_metrics, self.tr_dl, mode='train')
             # Validate
-            try:
-                with torch.no_grad():
-                    val_epoch_metrics = self.run_epoch('val', self.val_dl)
-                self.print_metrics(val_epoch_metrics, self.val_dl, mode='val')
+            with torch.no_grad():
+                val_epoch_metrics = self.run_epoch('val', self.val_dl,output_dir)
+            self.print_metrics(val_epoch_metrics, self.val_dl, mode='val')
 
-                # Scheduler step
-                self.scheduler.step()
+            # Scheduler step
+            self.scheduler.step()
 
-                # Update validation metric
-                self.val_metric = val_epoch_metrics[self.val_metrics[0].name] / val_epoch_metrics['minibatch_count']
+            # Update validation metric
+            self.val_metric = val_epoch_metrics[self.val_metrics[0].name] / val_epoch_metrics['minibatch_count']
 
-                # save best checkpoint when applicable
-                if self.val_metric < self.min_val_metric:
-                    self.min_val_metric = self.val_metric
-                    self.save_checkpoint(os.path.join(output_dir, 'checkpoints', 'best.tar'))
+            # save best checkpoint when applicable
+            if self.val_metric < self.min_val_metric:
+                self.min_val_metric = self.val_metric
+                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', 'best.tar'))
 
-                # Save checkpoint
-                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
-            except:
-                self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
+            # Save checkpoint
+            self.save_checkpoint(os.path.join(output_dir, 'checkpoints', str(self.current_epoch) + '.tar'))
+
     
     
     def grad_norm(self):
@@ -193,109 +225,105 @@ class Trainer:
             torch.cuda.empty_cache()
             # Load data
             data = u.send_to_device(u.convert_double_to_float(data))
-            if self.pretrain_mlp or self.teacher_force:
-                data['inputs']['gt_traj']=data['ground_truth']['traj']
-            else: 
-                data['inputs']['gt_traj']= None
+            # if self.pretrain_mlp or self.teacher_force:
+            #     data['inputs']['gt_traj']=data['ground_truth']['traj']
+            # else: 
+            #     data['inputs']['gt_traj']= None
             # Forward pass
             # time1=time.time()
             predictions = self.model(data['inputs'])
             # if i%6==0:
             #     print('     Time for forward pass =',time.time()-time1)
-            def visualize(mode):
-                if mode == 'endpoints':
-                    shape=[predictions['mask'].shape[0],1,self.losses[0].H,self.losses[0].W]
-                    endpoint_map=predictions['mask'].clone().view(shape)
-                    endpoints=predictions['endpoints']
-                    for batch in range(shape[0]):
-                        for point in endpoints[batch]:
-                            x,y=point
-                            endpoint_map[batch,0,max(0,x-1):min(x+2,shape[-2]),max(0,y-1):min(shape[-1],y+2)]=0
-                    self.writer.add_image(
-                        "endpoints", make_grid(endpoint_map.float(), nrow=self.nrow,padding=0 ,normalize=True),self.tb_iters
-                    )
-                if mode == 'last_step_heatmap':
-                    if self.losses[0].reduce_map:
-                        nodes_2D=get_index(predictions['pred'],predictions['mask'],self.losses[0].H,self.losses[0].W)
-                        sparse_rep=(predictions['pred'][:,-1]).clone().detach()
-                        # normalize_factor,_=torch.max(sparse_rep,dim=-1,keepdim=True)
-                        # sparse_rep/=normalize_factor
-                        dense_pred=get_dense(sparse_rep.unsqueeze(1),nodes_2D,self.model.decoder.H,self.model.decoder.W).cpu()
-                        self.writer.add_image(
-                            "last_step_heatmap", make_grid(dense_pred, nrow=self.nrow,padding=0 ,normalize=True, scale_each=True),self.tb_iters
-                        )
-                    else:
-                        mask_map=predictions['mask'].unsqueeze(1).clone().detach().float()
-                        prob=predictions['pred'][:,-1].clone().detach().unsqueeze(1)*255
-                        heatmap=torch.cat((prob,torch.zeros_like(prob),mask_map*10),dim=1)
-                        origin=torch.round(self.losses[0].compensation).int()
-                        heatmap[:,:,origin[0]-2:origin[0]+2,origin[1]-2:origin[1]+2]=20
-                        self.writer.add_image(
-                            "last_step_heatmap", make_grid(heatmap.cpu(), nrow=self.nrow,padding=0 ,normalize=True, scale_each=True),self.tb_iters
-                        )
-                if mode == 'traj':
-                    gt_map=self.losses[0].generate_gtmap(predictions['traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
-                    gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
-                    mask_map=gt_map.clone()
-                    mask_map[predictions['mask'].view(gt_map.shape)]=0.5
-                    gt_map+=mask_map
-                    gt_map=gt_map.repeat(1,3,1,1)
-                    gt_map*=127
-                    self.writer.add_image(
-                        "trajectory_heatmap", make_grid(gt_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
-                    )
-                if mode == 'occ':
-                     traj_map=self.focal.generate_gtmap(predictions['traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),visualize=True)
-                     traj_map=torch.clamp(torch.sum(traj_map,dim=1,keepdim=True),0.0,1.0)
-                     gt_map=self.focal.generate_gtmap(data['ground_truth']['traj'][:,:,:-1].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),visualize=True)
-                     gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
-                     agg_map=torch.cat((traj_map,torch.zeros_like(traj_map),gt_map),dim=1)
+            # def visualize(mode):
+            #     if mode == 'endpoints':
+            #         shape=[predictions['mask'].shape[0],1,self.losses[0].H,self.losses[0].W]
+            #         endpoint_map=predictions['mask'].clone().view(shape)
+            #         endpoints=predictions['endpoints']
+            #         for batch in range(shape[0]):
+            #             for point in endpoints[batch]:
+            #                 x,y=point
+            #                 endpoint_map[batch,0,max(0,x-1):min(x+2,shape[-2]),max(0,y-1):min(shape[-1],y+2)]=0
+            #         self.writer.add_image(
+            #             "endpoints", make_grid(endpoint_map.float(), nrow=self.nrow,padding=0 ,normalize=True),self.tb_iters
+            #         )
+            #     if mode == 'last_step_heatmap':
+            #         if self.losses[0].reduce_map:
+            #             nodes_2D=get_index(predictions['pred'],predictions['mask'],self.losses[0].H,self.losses[0].W)
+            #             sparse_rep=(predictions['pred'][:,-1]).clone().detach()
+            #             # normalize_factor,_=torch.max(sparse_rep,dim=-1,keepdim=True)
+            #             # sparse_rep/=normalize_factor
+            #             dense_pred=get_dense(sparse_rep.unsqueeze(1),nodes_2D,self.model.decoder.H,self.model.decoder.W).cpu()
+            #             self.writer.add_image(
+            #                 "last_step_heatmap", make_grid(dense_pred, nrow=self.nrow,padding=0 ,normalize=True, scale_each=True),self.tb_iters
+            #             )
+            #         else:
+            #             mask_map=predictions['mask'].unsqueeze(1).clone().detach().float()
+            #             prob=predictions['pred'][:,-1].clone().detach().unsqueeze(1)*255
+            #             heatmap=torch.cat((prob,torch.zeros_like(prob),mask_map*10),dim=1)
+            #             origin=torch.round(self.losses[0].compensation).int()
+            #             heatmap[:,:,origin[0]-2:origin[0]+2,origin[1]-2:origin[1]+2]=20
+            #             self.writer.add_image(
+            #                 "last_step_heatmap", make_grid(heatmap.cpu(), nrow=self.nrow,padding=0 ,normalize=True, scale_each=True),self.tb_iters
+            #             )
+            #     if mode == 'traj':
+            #         gt_map=self.losses[0].generate_gtmap(predictions['traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
+            #         gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
+            #         mask_map=gt_map.clone()
+            #         mask_map[predictions['mask'].view(gt_map.shape)]=0.5
+            #         gt_map+=mask_map
+            #         gt_map=gt_map.repeat(1,3,1,1)
+            #         gt_map*=127
+            #         self.writer.add_image(
+            #             "trajectory_heatmap", make_grid(gt_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
+            #         )
+            #     if mode == 'occ':
+            #          traj_map=self.focal.generate_gtmap(predictions['traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),visualize=True)
+            #          traj_map=torch.clamp(torch.sum(traj_map,dim=1,keepdim=True),0.0,1.0)
+            #          gt_map=self.focal.generate_gtmap(data['ground_truth']['traj'][:,:,:-1].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),visualize=True)
+            #          gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
+            #          agg_map=torch.cat((traj_map,torch.zeros_like(traj_map),gt_map),dim=1)
+            #          ref_traj_map=self.focal.generate_gtmap(predictions['refined_traj'].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),visualize=True)
+            #          ref_traj_map=torch.clamp(torch.sum(traj_map,dim=1,keepdim=True),0.0,1.0)
+            #          ref_agg_map=torch.cat((ref_traj_map,torch.zeros_like(ref_traj_map),gt_map),dim=1)
                      
-                     traj_map_rev=self.focal.generate_gtmap(predictions['traj_rev'].view(predictions['traj_rev'].shape[0],-1,predictions['traj_rev'].shape[-1]).clone().detach(),visualize=True)
-                     traj_map_rev=torch.clamp(torch.sum(traj_map_rev,dim=1,keepdim=True),0.0,1.0)
-                     gt_map_rev=self.focal.generate_gtmap(data['ground_truth']['traj_rev'][:,:,:-1].view(predictions['traj_rev'].shape[0],-1,predictions['traj_rev'].shape[-1]).clone().detach(),visualize=True)
-                     gt_map_rev=torch.clamp(torch.sum(gt_map_rev,dim=1,keepdim=True),0.0,1.0)
-                     agg_map_rev=torch.cat((traj_map_rev,torch.zeros_like(traj_map_rev),gt_map_rev),dim=1)
-                    #  self.writer.add_image(
-                    #     "pred_trajectory_map", make_grid(traj_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
-                    # )
-                    #  self.writer.add_image(
-                    #     "gt_trajectory_map", make_grid(gt_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
-                    # )
-                     self.writer.add_image(
-                        "agg_map", make_grid(agg_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
-                    )
-                     self.writer.add_image(
-                        "agg_map_rev", make_grid(agg_map_rev.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
-                    )
-                if mode == 'all':
-                    traj_idx=0
-                    gt_map=self.losses[0].generate_gtmap(predictions['traj'][:,traj_idx].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
-                    gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
-                    mask_map=gt_map.clone()
-                    mask_map[predictions['mask'].view(gt_map.shape)]=0.5
-                    gt_map+=mask_map
-                    gt_map=gt_map.repeat(1,3,1,1)
-                    gt_map*=127
-                    endpoints=predictions['endpoints']
-                    for batch in range(gt_map.shape[0]):
-                        for i,point in enumerate(endpoints[batch]):
-                            if i== traj_idx:
-                                x,y=point
-                                gt_map[batch,:-1,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=0
-                                gt_map[batch,-1,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=255
+            #          self.writer.add_image(
+            #             "agg_map", make_grid(agg_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
+            #         )
+            #          self.writer.add_image(
+            #             "ref_agg_map", make_grid(ref_agg_map.cpu(), nrow=self.nrow, normalize=True,scale_each=True),self.tb_iters
+            #         )
+
+            #     if mode == 'all':
+            #         traj_idx=0
+            #         gt_map=self.losses[0].generate_gtmap(predictions['traj'][:,traj_idx].view(predictions['traj'].shape[0],-1,predictions['traj'].shape[-1]).clone().detach(),predictions['mask'],visualize=True)
+            #         gt_map=torch.clamp(torch.sum(gt_map,dim=1,keepdim=True),0.0,1.0)
+            #         mask_map=gt_map.clone()
+            #         mask_map[predictions['mask'].view(gt_map.shape)]=0.5
+            #         gt_map+=mask_map
+            #         gt_map=gt_map.repeat(1,3,1,1)
+            #         gt_map*=127
+            #         endpoints=predictions['endpoints']
+            #         for batch in range(gt_map.shape[0]):
+            #             for i,point in enumerate(endpoints[batch]):
+            #                 if i== traj_idx:
+            #                     x,y=point
+            #                     gt_map[batch,:-1,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=0
+            #                     gt_map[batch,-1,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=255
                                 
-                            else:
-                                x,y=point
-                                gt_map[batch,1:,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=0
-                                gt_map[batch,0,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=255
-                    self.writer.add_image(
-                        "all", make_grid(gt_map.cpu(), nrow=self.nrow, normalize=True),self.tb_iters
-                    )
+            #                 else:
+            #                     x,y=point
+            #                     gt_map[batch,1:,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=0
+            #                     gt_map[batch,0,max(0,x-1):min(x+2,self.losses[0].H),max(0,y-1):min(self.losses[0].W,y+2)]=255
+            #         self.writer.add_image(
+            #             "all", make_grid(gt_map.cpu(), nrow=self.nrow, normalize=True),self.tb_iters
+            #         )
             if self.add_img:
                 with torch.no_grad():
-                    if i%self.add_img_freq==0:     
-                        visualize('occ')                               
+                    if (i)%self.add_img_period==0 and self.current_epoch>=self.visualize_start_epoch:                                 
+                        file_name='Epc'+str(self.current_epoch)+'_batch'+str(i)
+                        u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helpers[mode], output_dir+'imgs', file_name, 'raw')
+                        if self.current_epoch>=self.pretrain_epcs:
+                            u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helpers[mode], output_dir+'imgs', file_name, 'refine')
                         # if ((not self.pretrain_mlp) and (not self.teacher_force)):
                         #     visualize('all')
                         #     visualize('last_step_heatmap')
@@ -368,7 +396,6 @@ class Trainer:
                             # self.writer.add_image(
                             #     "endpoints", make_grid(endpoint_map, nrow=4,padding=0 ,normalize=True),self.tb_iters
                             # )
-                        torch.cuda.empty_cache()
 
 
 
@@ -403,10 +430,10 @@ class Trainer:
                         # print(sum)
                         # print(corrupt_map[self.model.decoder.compensation[0]-1:self.model.decoder.compensation[0]+2,self.model.decoder.compensation[1]-1:self.model.decoder.compensation[1]+2])
                         print(i)
-                        for loss in self.losses:
+                        for loss in self.activated_losses:
                             print(loss.name,':')
                             print(loss.compute(predictions, data['ground_truth']).item())
-                    raise NotImplementedError()
+                    raise Exception('Loss value is nan at %d-th batch' % (i))
                 # print('################ Memory usage after compute loss ####################')
                 # print(torch.cuda.memory_summary(device=device, abbreviated=False))
                 # time2=time.time()
@@ -445,10 +472,10 @@ class Trainer:
         """
         Computes loss given model outputs and ground truth labels
         """
-        loss_vals = [loss.compute(model_outputs, ground_truth) for loss in self.losses]
+        loss_vals = [loss.compute(model_outputs, ground_truth) for loss in self.activated_losses]
         total_loss = torch.as_tensor(0, device=device).float()
         for n in range(len(loss_vals)):
-            total_loss += self.loss_weights[n] * loss_vals[n]
+            total_loss += self.activated_loss_weights[n] * loss_vals[n]
 
         return total_loss
 

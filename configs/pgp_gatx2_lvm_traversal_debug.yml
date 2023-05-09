@@ -33,13 +33,16 @@ test_set_args:
   use_home: False
   use_raster: False
 
-batch_size: 4
+batch_size: 16
 num_workers: 8
-use_teacher_force: True
+use_teacher_force: False
 nrow: 6
+pretrain: True
+pretrain_epcs: 3
+visualize_start_epoch: 8
 
 focal_args:
-  map_extent: [ -50, 50, -20, 80 ]
+  map_extent: [ -100, 100, -100, 100 ]
   gauss_blur: True
   resolution: 0.5
   window_size: 13
@@ -52,20 +55,23 @@ focal_args:
 # Encoder parameters
 encoder_type: 'pgp_encoder_occ'
 encoder_args:
-  map_aggregation: True
+  map_aggregation: False
   motion_enc_type: 'ugru'
   target_agent_feat_size: 4
   target_agent_emb_size: 16
   target_agent_enc_size: 32
   node_feat_size: 6
   node_emb_size: 16
-  node_enc_size: 32
+  node_enc_size: 48
   nbr_feat_size: 5
   nbr_emb_size: 16
   nbr_enc_size: 32
   num_gat_layers: 2
-  map_size: 36
-  tn_head_num: 2
+  fuse_map_with_tgt: False
+  encode_sub_node: True
+  concat_latest: True
+  # map_size: 36
+  # tn_head_num: 2
   
 
 
@@ -74,7 +80,7 @@ encoder_args:
 # Aggregator parameters
 aggregator_type: 'attn_occ'
 aggregator_args:
-  method: 'attention'
+  method: 'concat'
   pre_train: False
   time_emb_size: 12
   target_emb_size: 32
@@ -86,8 +92,13 @@ aggregator_args:
 decoder_type: 'mlp_occ'
 decoder_args:
   add_attention: True
-  pretrain_mlp: False
   time_emb_size: 48
+  node_enc_size: 48
+  refinement: True
+  sep_motion_emb: False
+  motion_emb_size: 18
+  traj_emb_size: 48
+  use_gru: True
 
 
 # Optimizer parameters
@@ -97,25 +108,33 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['l1_loss', 'yaw_loss']
-loss_weights: [1, 0.5]
+losses: ['ade', 'yaw_loss','ade', 'yaw_loss', 'ade', 'yaw_loss']
+loss_weights: [1, 0.5, 1, 0.5, 1, 0.5]
 loss_args:
-  - dummy: 0
-  - dummy: 0
+  - target: 'initial'
+  - target: 'initial'
+  - target: 'refine'
+  - target: 'refine'
+  - target: 'endpoints'
+  - target: 'endpoints'
 
 
-tr_metrics: ['l1_loss', 'yaw_loss', 'ade','miss_rate']
+
+tr_metrics: ['yaw_loss', 'ade','miss_rate']
 tr_metric_args:
-  - dummy: 0
-  - dummy: 0
-  - dummy: 0
+  - target: 'initial'
+  - target: 'initial'
   - dist_thresh: 2.0
+    target: 'initial'
+  # - target: 'refine'
+  # - target: 'refine'
 
-val_metrics: ['ade','miss_rate', 'yaw_loss']
+val_metrics: [ 'ade', 'yaw_loss']
 val_metric_args:
-  - dummy: 0
-  - dist_thresh: 2.0
-  - dummy: 0
+  - target: 'initial'
+  - target: 'initial'
+  # - target: 'refine'
+  # - target: 'refine'
 
 
 log_freq: 2

@@ -55,7 +55,7 @@ focal_args:
 # Encoder parameters
 encoder_type: 'pgp_encoder_occ'
 encoder_args:
-  map_aggregation: False
+  map_aggregation: True
   motion_enc_type: 'ugru'
   target_agent_feat_size: 4
   target_agent_emb_size: 24
@@ -68,8 +68,6 @@ encoder_args:
   nbr_enc_size: 32
   num_gat_layers: 2
   fuse_map_with_tgt: False
-  encode_sub_node: True
-  concat_latest: True
   # map_size: 36
   # tn_head_num: 2
   
@@ -131,14 +129,14 @@ tr_metric_args:
   # - target: 'refine'
   # - target: 'refine'
 
-val_metrics: [ 'ade', 'yaw_loss','ade', 'yaw_loss']
+val_metrics: [ 'ade', 'yaw_loss','ade', 'yaw_loss','ade', 'yaw_loss']
 val_metric_args:
   - target: 'initial'
   - target: 'initial'
   - target: 'endpoints'
   - target: 'endpoints'
-  # - target: 'refine'
-  # - target: 'refine'
+  - target: 'refine'
+  - target: 'refine'
 
 
 log_freq: 100

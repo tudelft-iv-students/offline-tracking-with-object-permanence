@@ -47,6 +47,11 @@ class Attention_occ(PredictionAggregator):
         query_emb=self.tq_embder(time_query)
         concat_tgt_enc=torch.cat((target_hist,target_future),dim=-1).repeat(1,query_emb.shape[1],1)
         concat_query=self.compressor(torch.cat((query_emb,concat_tgt_enc),dim=-1))
+        if 'endpoints' in target_representation['time_query']:
+            endpt_query=target_representation['time_query']['endpoints']
+            endpt_query_emb=self.tq_embder(endpt_query)
+            concat_tgt_enc_endpt=torch.cat((target_hist,target_future),dim=-1).repeat(1,endpt_query_emb.shape[1],1)
+            concat_endpt_query=self.compressor(torch.cat((endpt_query_emb,concat_tgt_enc_endpt),dim=-1))
         if self.method == 'attention' and ('map_info' in target_representation):
             # q_t_attn_masks = mask.bool()
             map_query_emb=self.query_emb(time_query).permute(1,0,2)
@@ -57,9 +62,25 @@ class Attention_occ(PredictionAggregator):
             # t_q_att_op = torch.cat((t_q_att_op, time_query), dim=-1)
             agg_feature=self.mlp_agg(torch.cat((t_q_att_op,concat_query),dim=-1))
             time_query_enc={'query':agg_feature,'mask':mask}
+            if 'endpoints' in target_representation['time_query']:
+                ep_query_emb=self.query_emb(endpt_query).permute(1,0,2)
+                ep_map_key=self.key_emb(map_info).permute(1,0,2)
+                ep_map_val=self.val_emb(map_info).permute(1,0,2)
+                ep_att_op, _ = self.tq_attn(ep_query_emb, ep_map_key, ep_map_val)
+                ep_att_op=ep_att_op.transpose(0,1)
+                # t_q_att_op = torch.cat((t_q_att_op, time_query), dim=-1)
+                ep_agg_feature=self.mlp_agg(torch.cat((ep_att_op,concat_endpt_query),dim=-1))
+                time_query_enc['endpoints']=ep_agg_feature
         else:
-
             time_query_enc={'query':concat_query,'mask':mask}
+            if 'endpoints' in target_representation['time_query']:
+                time_query_enc['endpoints']=concat_endpt_query
+        if 'lane_ctrs' in encodings['context_encoding']:
+            time_query_enc['map_info']={'lane_ctrs':encodings['context_encoding']['lane_ctrs'],
+                                        'lane_encodings':encodings['context_encoding']['combined'],
+                                        'lane_masks':encodings['context_encoding']['combined_masks']}
+        if 'refine_input' in encodings:
+            time_query_enc['refine_input'] = encodings['refine_input']
         return time_query_enc
 
     @staticmethod

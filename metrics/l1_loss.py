@@ -9,7 +9,8 @@ class L1_loss(Metric):
     Minimum average displacement error for the top K trajectories.
     """
     def __init__(self, args: Dict):
-        self.name = 'l1_loss' 
+        self.name = 'l1_'+args['target']
+        self.target = args['target']
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -19,7 +20,12 @@ class L1_loss(Metric):
         :return:
         """
         # Unpack arguments
-        traj = predictions['traj']
+        if self.target=='initial':
+            traj = predictions['traj']
+        elif self.target=='refine':
+            traj = predictions['refined_traj']
+        else:
+            raise Exception('Target needs to be one of {initial, or refine}')
         traj_gt = ground_truth['traj'][:,:,:-1] if type(ground_truth) == dict else ground_truth[:,:,:-1]
 
         # Useful params

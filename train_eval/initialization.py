@@ -47,8 +47,6 @@ from metrics.goal_pred_nll import GoalPredictionNLL
 from metrics.focal_loss import FocalLoss
 from metrics.l1_loss import L1_loss
 from metrics.yaw_loss import Yaw_loss
-from metrics.l1_loss_rev import L1_loss_REV
-from metrics.yaw_loss_rev import Yaw_loss_REV
 from metrics.ade import ADE
 from metrics.mr import MissRate
 from metrics.drivable_area_loss import DrivablelLoss
@@ -178,8 +176,6 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'drivable_loss':DrivablelLoss,
         'l1_loss': L1_loss,
         'yaw_loss':Yaw_loss,
-        'l1_loss_rev': L1_loss_REV,
-        'yaw_loss_rev':Yaw_loss_REV,
         'ade':ADE,
         'miss_rate':MissRate
     }

@@ -9,6 +9,7 @@ import numpy as np
 from nuscenes.prediction.helper import convert_local_coords_to_global
 from nuscenes.eval.prediction.data_classes import Prediction
 import json
+from datasets.nuScenes.prediction import PredictHelper_occ
 
 
 # Initialize device:
@@ -36,7 +37,7 @@ class Evaluator:
         test_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['test_set_args']] + spec_args)
 
         # Initialize dataloader
-        self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=False, num_workers=cfg['num_workers'])
+        self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'])
 
         # Initialize model
         self.model = initialize_prediction_model(cfg['encoder_type'], cfg['aggregator_type'], cfg['decoder_type'],
@@ -57,6 +58,11 @@ class Evaluator:
         self.model.decoder.teacher_force = False
         self.teacher_force = False
         self.model.decoder.pretrain_mlp = False
+        self.add_img=True
+        self.add_img_period=len(self.dl)//8
+        self.visualize_start_epoch=cfg['visualize_start_epoch']
+        if self.add_img:
+            self.vis_helper=PredictHelper_occ(self.dl.dataset.helper.data)
 
     def evaluate(self, output_dir: str):
         """
@@ -78,7 +84,10 @@ class Evaluator:
                     data['inputs']['gt_traj']= None
                 # Forward pass
                 predictions = self.model(data['inputs'])
-
+                if self.add_img and (i+1) % self.add_img_period==0:
+                    file_name='Batch'+str(i)
+                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, output_dir+'imgs', file_name, 'raw')
+                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, output_dir+'imgs', file_name, 'refine')
                 # Aggregate metrics
                 agg_metrics = self.aggregate_metrics(agg_metrics, predictions, data['ground_truth'])
 

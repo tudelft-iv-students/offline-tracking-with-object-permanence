@@ -11,7 +11,8 @@ class MissRate(Metric):
 
     def __init__(self, args: Dict):
         self.dist_thresh = args['dist_thresh']
-        self.name = 'miss_rate'
+        self.target=args['target']
+        self.name = 'MR'
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -21,8 +22,14 @@ class MissRate(Metric):
         :return:
         """
         # Unpack arguments
-        traj = predictions['traj']
         traj_gt = ground_truth['traj'][:,:,:-1] if type(ground_truth) == dict else ground_truth[:,:,:-1]
+        
+        if self.target=='initial':
+            traj = predictions['traj']
+        elif self.target=='refine':
+            traj = predictions['refined_traj']
+        else:
+            raise Exception('Target needs to be one of {initial, or refine}')
 
         # Useful params
         batch_size = traj.shape[0]

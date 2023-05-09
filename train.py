@@ -20,6 +20,8 @@ if not os.path.isdir(args.output_dir):
     os.mkdir(args.output_dir)
 if not os.path.isdir(os.path.join(args.output_dir, 'checkpoints')):
     os.mkdir(os.path.join(args.output_dir, 'checkpoints'))
+if not os.path.isdir(os.path.join(args.output_dir, 'imgs')):
+    os.mkdir(os.path.join(args.output_dir, 'imgs'))
 if not os.path.isdir(os.path.join(args.output_dir, 'tensorboard_logs')):
     os.mkdir(os.path.join(args.output_dir, 'tensorboard_logs'))
 
@@ -27,7 +29,6 @@ if not os.path.isdir(os.path.join(args.output_dir, 'tensorboard_logs')):
 # Load config
 with open(args.config, 'r') as yaml_file:
     cfg = yaml.safe_load(yaml_file)
-
 
 # Initialize tensorboard writer
 writer = SummaryWriter(log_dir=os.path.join(args.output_dir, 'tensorboard_logs'))
