@@ -50,7 +50,7 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 
 # Computations should be started with 'srun'. For example:
 
-srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/use_mid_origin_pretrain_new/ -n 23 -w output/test_occ/ugru/use_mid_origin_pretrain_new/checkpoints/26.tar
+srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/double_refine_initial_fusion/ -n 23 -w output/test_occ/ugru/double_refine_initial_fusion/checkpoints/26.tar
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 

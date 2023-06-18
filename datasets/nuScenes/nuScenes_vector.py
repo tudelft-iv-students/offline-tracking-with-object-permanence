@@ -66,8 +66,8 @@ class NuScenesVector(NuScenesTrajectories):
             stats = self.load_stats()
             if not self.use_raster:
                 self.max_nodes = stats['num_lane_nodes']
-            self.max_vehicles = stats['num_vehicles']
-            self.max_pedestrians = stats['num_pedestrians']
+            # self.max_vehicles = stats['num_vehicles']
+            # self.max_pedestrians = stats['num_pedestrians']
 
         # Whether to add random flips for data augmentation
         elif self.mode == 'load_data':

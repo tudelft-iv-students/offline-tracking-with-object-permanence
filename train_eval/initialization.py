@@ -7,6 +7,7 @@ from datasets.nuScenes.nuScenes_raster import NuScenesRaster
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
 from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
 from datasets.nuScenes.nuScenes_graphs_occ import NuScenesGraphs_OCC
+from datasets.nuScenes.nuScenes_graphs_match import NuScenesGraphs_MATCH
 
 # Import models
 from models.model import PredictionModel
@@ -62,7 +63,8 @@ def initialize_dataset(dataset_type: str, args: List) -> TrajectoryDataset:
     dataset_classes = {'nuScenes_single_agent_raster': NuScenesRaster,
                        'nuScenes_single_agent_vector': NuScenesVector,
                        'nuScenes_single_agent_graphs': NuScenesGraphs,
-                       'nuScenes_single_agent_graphs_occ': NuScenesGraphs_OCC
+                       'nuScenes_single_agent_graphs_occ': NuScenesGraphs_OCC,
+                       'nuScenes_single_agent_match': NuScenesGraphs_MATCH
                        }
     return dataset_classes[dataset_type](*args)
 

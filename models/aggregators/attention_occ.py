@@ -24,14 +24,25 @@ class Attention_occ(PredictionAggregator):
         super().__init__()
         self.tq_embder=nn.Sequential(nn.Linear(2,args['time_emb_size']),nn.LeakyReLU())
         self.method=args['method']
-        if self.method == 'attention':
-            self.tq_attn = nn.MultiheadAttention(args['attn_size'], 1)
-            self.query_emb = nn.Sequential(nn.Linear(2, args['attn_size']),nn.LeakyReLU())
-            self.key_emb = nn.Sequential(nn.Linear(args['map_size'], args['attn_size']),nn.LeakyReLU())
-            self.val_emb = nn.Sequential(nn.Linear(args['map_size'], args['attn_size']),nn.LeakyReLU())
-            self.mlp_agg = leaky_MLP(args['query_enc_size']+args['attn_size'],args['query_enc_size'])
-        
-        self.compressor = leaky_MLP((args['time_emb_size']+2*args['target_emb_size']),args['query_enc_size'])
+        self.concat_latest = args['concat_latest']
+        if self.concat_latest:
+            if self.method == 'attention':
+                self.tq_attn = nn.MultiheadAttention(args['attn_size'], 1)
+                self.query_emb = nn.Sequential(nn.Linear(2, args['attn_size']),nn.LeakyReLU())
+                self.key_emb = nn.Sequential(nn.Linear(2, args['attn_size']),nn.LeakyReLU())
+                self.val_emb = nn.Sequential(nn.Linear(args['target_emb_size']+3, args['attn_size']),nn.LeakyReLU())
+                self.mlp_agg = leaky_MLP(args['query_enc_size']+args['attn_size'],args['query_enc_size'])
+            
+            self.compressor = leaky_MLP((args['time_emb_size']+2*(args['target_emb_size']+3)),args['query_enc_size'])
+        else:
+            if self.method == 'attention':
+                self.tq_attn = nn.MultiheadAttention(args['attn_size'], 1)
+                self.query_emb = nn.Sequential(nn.Linear(2, args['attn_size']),nn.LeakyReLU())
+                self.key_emb = nn.Sequential(nn.Linear(2, args['attn_size']),nn.LeakyReLU())
+                self.val_emb = nn.Sequential(nn.Linear(args['target_emb_size'], args['attn_size']),nn.LeakyReLU())
+                self.mlp_agg = leaky_MLP(args['query_enc_size']+args['attn_size'],args['query_enc_size'])
+            
+            self.compressor = leaky_MLP((args['time_emb_size']+2*args['target_emb_size']),args['query_enc_size'])
 
     def forward(self, encodings: Dict) -> torch.Tensor:
         """
@@ -40,8 +51,6 @@ class Attention_occ(PredictionAggregator):
         target_representation=encodings['target_agent_encoding']
         target_hist=target_representation['hist']
         target_future=target_representation['future']
-        if 'map_info' in target_representation:
-            map_info=target_representation['map_info']
         time_query=target_representation['time_query']['query']
         mask=target_representation['time_query']['mask']
         query_emb=self.tq_embder(time_query)
@@ -52,20 +61,21 @@ class Attention_occ(PredictionAggregator):
             endpt_query_emb=self.tq_embder(endpt_query)
             concat_tgt_enc_endpt=torch.cat((target_hist,target_future),dim=-1).repeat(1,endpt_query_emb.shape[1],1)
             concat_endpt_query=self.compressor(torch.cat((endpt_query_emb,concat_tgt_enc_endpt),dim=-1))
-        if self.method == 'attention' and ('map_info' in target_representation):
+        if self.method == 'attention':
             # q_t_attn_masks = mask.bool()
-            map_query_emb=self.query_emb(time_query).permute(1,0,2)
-            map_key=self.key_emb(map_info).permute(1,0,2)
-            map_val=self.val_emb(map_info).permute(1,0,2)
-            t_q_att_op, _ = self.tq_attn(map_query_emb, map_key, map_val)
+            feature=torch.cat((target_hist,target_future),dim=1)
+            attn_query=self.query_emb(time_query).permute(1,0,2)
+            key=self.key_emb(endpt_query).permute(1,0,2)
+            val=self.val_emb(feature).permute(1,0,2)
+            t_q_att_op, _ = self.tq_attn(attn_query, key, val)
             t_q_att_op=t_q_att_op.transpose(0,1)
             # t_q_att_op = torch.cat((t_q_att_op, time_query), dim=-1)
             agg_feature=self.mlp_agg(torch.cat((t_q_att_op,concat_query),dim=-1))
             time_query_enc={'query':agg_feature,'mask':mask}
             if 'endpoints' in target_representation['time_query']:
                 ep_query_emb=self.query_emb(endpt_query).permute(1,0,2)
-                ep_map_key=self.key_emb(map_info).permute(1,0,2)
-                ep_map_val=self.val_emb(map_info).permute(1,0,2)
+                ep_map_key=self.key_emb(endpt_query).permute(1,0,2)
+                ep_map_val=self.val_emb(feature).permute(1,0,2)
                 ep_att_op, _ = self.tq_attn(ep_query_emb, ep_map_key, ep_map_val)
                 ep_att_op=ep_att_op.transpose(0,1)
                 # t_q_att_op = torch.cat((t_q_att_op, time_query), dim=-1)
@@ -75,10 +85,12 @@ class Attention_occ(PredictionAggregator):
             time_query_enc={'query':concat_query,'mask':mask}
             if 'endpoints' in target_representation['time_query']:
                 time_query_enc['endpoints']=concat_endpt_query
+        if 'lane_info' in encodings['context_encoding']:
+            time_query_enc['lane_info']=encodings['context_encoding']['lane_info']
         if 'lane_ctrs' in encodings['context_encoding']:
-            time_query_enc['map_info']={'lane_ctrs':encodings['context_encoding']['lane_ctrs'],
-                                        'lane_encodings':encodings['context_encoding']['combined'],
-                                        'lane_masks':encodings['context_encoding']['combined_masks']}
+            time_query_enc['lane_ctrs']=encodings['context_encoding']['lane_ctrs']
+        if 'nbr_info' in encodings['context_encoding']:
+            time_query_enc['nbr_info']=encodings['context_encoding']['nbr_info']
         if 'refine_input' in encodings:
             time_query_enc['refine_input'] = encodings['refine_input']
         return time_query_enc

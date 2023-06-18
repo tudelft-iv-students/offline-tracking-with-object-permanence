@@ -148,3 +148,16 @@ output/test_home/
 *tensorboard_logs/
 *checkpoints/
 *.tar
+
+output/test*
+preprocess_home_mini/*
+preprocess_home/*
+preprocess_home_mini/
+preprocess_home/
+preprocess_graph_mini_test/
+preprocess_graph/
+preprocess_graph*/
+output/
+nuscenes-prediction-challenge-trajectory-sets/
+*.err
+*.out

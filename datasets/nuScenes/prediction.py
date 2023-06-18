@@ -332,7 +332,7 @@ class PredictHelper_occ:
 
     def _compute_diff_between_sample_annotations(self, instance_token: str,
                                                  sample_token: str, max_time_diff: float,
-                                                 with_function, **kwargs) -> float:
+                                                 with_function, direction='prev',**kwargs) -> float:
         """
         Grabs current and previous annotation and computes a float from them.
         :param instance_token: Instance token.
@@ -343,25 +343,44 @@ class PredictHelper_occ:
         :param **kwargs: Keyword arguments to give to with_function.
 
         """
-        annotation = self.get_sample_annotation(instance_token, sample_token)
+        if direction=='prev':
+            annotation = self.get_sample_annotation(instance_token, sample_token)
 
-        if annotation['prev'] == '':
-            return np.nan
+            if annotation['prev'] == '':
+                return np.nan
 
-        prev = self.data.get('sample_annotation', annotation['prev'])
+            prev = self.data.get('sample_annotation', annotation['prev'])
 
-        current_time = 1e-6 * self.data.get('sample', sample_token)['timestamp']
-        prev_time = 1e-6 * self.data.get('sample', prev['sample_token'])['timestamp']
-        time_diff = current_time - prev_time
+            current_time = 1e-6 * self.data.get('sample', sample_token)['timestamp']
+            prev_time = 1e-6 * self.data.get('sample', prev['sample_token'])['timestamp']
+            time_diff = current_time - prev_time
 
-        if time_diff <= max_time_diff:
+            if time_diff <= max_time_diff:
 
-            return with_function(annotation, prev, time_diff, **kwargs)
+                return with_function(annotation, prev, time_diff, **kwargs)
 
-        else:
-            return np.nan
+            else:
+                return np.nan
+        if direction=='next':
+            annotation = self.get_sample_annotation(instance_token, sample_token)
 
-    def get_velocity_for_agent(self, instance_token: str, sample_token: str, max_time_diff: float = 1.5) -> float:
+            if annotation['next'] == '':
+                return np.nan
+
+            next_ann = self.data.get('sample_annotation', annotation['next'])
+
+            current_time = 1e-6 * self.data.get('sample', sample_token)['timestamp']
+            next_time = 1e-6 * self.data.get('sample', next_ann['sample_token'])['timestamp']
+            time_diff = current_time - next_time 
+
+            if time_diff <= max_time_diff:
+
+                return with_function(annotation, next_ann, time_diff, **kwargs)
+
+            else:
+                return np.nan
+
+    def get_velocity_for_agent(self, instance_token: str, sample_token: str, max_time_diff: float = 1.5, direction:str='prev') -> float:
         """
         Computes velocity based on the difference between the current and previous annotation.
         :param instance_token: Instance token.
@@ -370,7 +389,7 @@ class PredictHelper_occ:
             than this param, function will return np.nan.
         """
         return self._compute_diff_between_sample_annotations(instance_token, sample_token, max_time_diff,
-                                                             with_function=velocity)
+                                                             direction=direction,with_function=velocity)
 
     def get_heading_change_rate_for_agent(self, instance_token: str, sample_token: str,
                                           max_time_diff: float = 1.5) -> float:

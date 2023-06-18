@@ -58,7 +58,7 @@ class Evaluator:
         self.model.decoder.teacher_force = False
         self.teacher_force = False
         self.model.decoder.pretrain_mlp = False
-        self.add_img=True
+        self.add_img=False
         self.add_img_period=len(self.dl)//8
         self.visualize_start_epoch=cfg['visualize_start_epoch']
         if self.add_img:

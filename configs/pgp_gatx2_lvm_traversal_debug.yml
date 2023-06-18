@@ -33,24 +33,14 @@ test_set_args:
   use_home: False
   use_raster: False
 
-batch_size: 16
-num_workers: 8
+batch_size: 128
+num_workers: 12
 use_teacher_force: False
 nrow: 6
 pretrain: True
-pretrain_epcs: 3
-visualize_start_epoch: 8
+pretrain_epcs: 1
+visualize_start_epoch: 0
 
-focal_args:
-  map_extent: [ -100, 100, -100, 100 ]
-  gauss_blur: True
-  resolution: 0.5
-  window_size: 13
-  horizon: 1
-  type: 'sum'
-  reduce_map: False
-  normalize: False
-  only_last: True
 
 # Encoder parameters
 encoder_type: 'pgp_encoder_occ'
@@ -58,7 +48,7 @@ encoder_args:
   map_aggregation: False
   motion_enc_type: 'ugru'
   target_agent_feat_size: 4
-  target_agent_emb_size: 16
+  target_agent_emb_size: 24
   target_agent_enc_size: 32
   node_feat_size: 6
   node_emb_size: 16
@@ -80,13 +70,14 @@ encoder_args:
 # Aggregator parameters
 aggregator_type: 'attn_occ'
 aggregator_args:
-  method: 'concat'
+  method: 'attention'
   pre_train: False
   time_emb_size: 12
   target_emb_size: 32
   query_enc_size: 48
   attn_size: 36
   map_size: 36
+  concat_latest: True
 
 # Decoder parameters
 decoder_type: 'mlp_occ'
@@ -94,12 +85,13 @@ decoder_args:
   add_attention: True
   time_emb_size: 48
   node_enc_size: 48
+  nbr_enc_size: 48
   refinement: True
   sep_motion_emb: False
   motion_emb_size: 18
-  traj_emb_size: 48
+  traj_emb_size: 32
+  traj_feat_size: 16
   use_gru: True
-
 
 # Optimizer parameters
 optim_args:
@@ -108,9 +100,12 @@ optim_args:
   scheduler_gamma: 0.5
 
 
-losses: ['ade', 'yaw_loss','ade', 'yaw_loss', 'ade', 'yaw_loss']
-loss_weights: [1, 0.5, 1, 0.5, 1, 0.5]
+# losses: ['ade', 'yaw_loss','ade', 'yaw_loss']
+losses: ['ade', 'yaw_loss', 'ade', 'yaw_loss', 'ade', 'yaw_loss', 'ade', 'yaw_loss']
+loss_weights: [1.0, 0.5, 1, 0.5, 1.5, 0.5, 2.5, 1.0]
 loss_args:
+  - target: 'pre-refine'
+  - target: 'pre-refine'
   - target: 'initial'
   - target: 'initial'
   - target: 'refine'
@@ -120,19 +115,25 @@ loss_args:
 
 
 
-tr_metrics: ['yaw_loss', 'ade','miss_rate']
+tr_metrics: ['ade','yaw_loss' ,'miss_rate','ade','yaw_loss','ade','yaw_loss']
 tr_metric_args:
   - target: 'initial'
   - target: 'initial'
   - dist_thresh: 2.0
     target: 'initial'
+  - target: 'endpoints'
+  - target: 'endpoints'
+  - target: 'pre-refine'
+  - target: 'pre-refine'
   # - target: 'refine'
   # - target: 'refine'
 
-val_metrics: [ 'ade', 'yaw_loss']
+val_metrics: [ 'ade', 'yaw_loss','ade', 'yaw_loss']
 val_metric_args:
   - target: 'initial'
   - target: 'initial'
+  - target: 'endpoints'
+  - target: 'endpoints'
   # - target: 'refine'
   # - target: 'refine'
 

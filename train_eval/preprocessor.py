@@ -34,6 +34,8 @@ def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True
         test_set = initialize_dataset(ds_type, ['compute_stats', data_dir, cfg['test_set_args']] + specific_args)
         compute_dataset_stats([train_set, val_set, test_set], cfg['batch_size'], cfg['num_workers'],
                               verbose=cfg['verbosity'])
+        # compute_dataset_stats([ test_set], cfg['batch_size'], cfg['num_workers'],
+        #                       verbose=cfg['verbosity'])
 
     # Extract data
     if extract:
@@ -41,6 +43,7 @@ def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True
         val_set = initialize_dataset(ds_type, ['extract_data', data_dir, cfg['val_set_args']] + specific_args)
         test_set = initialize_dataset(ds_type, ['extract_data', data_dir, cfg['test_set_args']] + specific_args)
         extract_data([train_set, val_set, test_set], cfg['batch_size'], cfg['num_workers'], verbose=cfg['verbosity'])
+        # extract_data([test_set], cfg['batch_size'], cfg['num_workers'], verbose=cfg['verbosity'])
 
 
 def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: int, num_workers: int, verbose=False):
@@ -65,6 +68,11 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
 
     # Initialize dataset statistics
     stats = {}
+    if dataset_splits[0].match:
+        for split in dataset_splits:
+            stats[split.name+"_"+"map_radius"]=[]
+            stats[split.name+"_"+"origin"]=[]
+            
 
     # For printing progress
     print("Computing dataset stats...")
@@ -75,7 +83,10 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
     for data_loader in data_loaders:
         for i, mini_batch_stats in enumerate(data_loader):
             for k, v in mini_batch_stats.items():
-                if k in stats.keys():
+                if k =='map_radius':
+                    split_name=data_loader.dataset.name
+                    stats[split_name+"_"+k]+=list(v)
+                elif k in stats.keys():
                     stats[k] = max(stats[k], torch.max(v).item())
                 else:
                     stats[k] = torch.max(v).item()
@@ -87,7 +98,8 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
     for split in dataset_splits:
         if split.augment:
             stats[split.name+"_times"]=split.time_lengths
-
+            if split.save_token_list:
+                stats[split.name+"_token_list"]=split.token_list
     # Save stats
     filename = os.path.join(dataset_splits[0].data_dir, 'stats.pickle')
     with open(filename, 'wb') as handle:

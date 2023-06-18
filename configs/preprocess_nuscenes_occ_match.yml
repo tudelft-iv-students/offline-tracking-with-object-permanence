@@ -1,0 +1,82 @@
+dataset: 'nuScenes'
+version: 'v1.0-mini'
+agent_setting: 'single_agent'
+input_representation: 'match'
+helper: 'occ'
+
+train_set_args:
+  split: 'mini_train'
+  t_h: 2
+  t_f: 15
+  split_name: 'train'
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 10
+  traversal_horizon: 15
+  match: True
+  augment: False
+  # random_tf: True
+  # mask_prob: 0.8
+  # augment_prob: 0.4 
+  # augment_min: 1.5
+  # dep_thresh: 12
+  # dep_percent: 0.75
+  # traj_mask_prob: 0.2
+  random_rots: True
+  rdm_rot_prob: 0.4
+  adjust_yaw: True
+
+
+val_set_args:
+  split: 'mini_val'
+  t_h: 2
+  t_f: 15
+  split_name: 'val'
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 10
+  traversal_horizon: 15
+  match: True
+  augment: False
+  # random_tf: True
+  # mask_prob: 0.8
+  # augment_prob: 0.4 
+  # augment_min: 1.5
+  # dep_thresh: 9
+  # dep_percent: 0.75
+  # traj_mask_prob: 0.2
+  # use_mid_origin: True
+  random_rots: False
+  adjust_yaw: True
+
+test_set_args:
+  split: 'mini_val'
+  t_h: 2
+  t_f: 15.0
+  use_home: False
+  split_name: 'test'
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 10
+  traversal_horizon: 15
+  match: True
+  augment: False
+  # augment: True
+  # random_tf: False
+  # mask_prob: 0.8
+  # augment_prob: 0.4 
+  # augment_min: 1.5
+  # dep_thresh: 9
+  # dep_percent: 0.75
+  # traj_mask_prob: 0.2
+  # use_mid_origin: True
+  random_rots: False
+  adjust_yaw: True
+batch_size: 36
+num_workers: 12
+verbosity: True

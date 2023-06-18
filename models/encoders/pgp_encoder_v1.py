@@ -48,28 +48,29 @@ class PGPEncoder_occ(PredictionEncoder):
         self.target_concat_emb = nn.Linear(args['target_agent_feat_size']+1, args['target_agent_emb_size'])
         self.bi_gru = nn.GRU(args['target_agent_emb_size'], args['target_agent_emb_size'], batch_first=True, bidirectional= True)
         if self.fuse_map_with_tgt:
-            self.target_past_enc = nn.GRU(args['target_agent_emb_size']*3, args['target_agent_enc_size'], batch_first=True)
-            self.target_fut_enc = nn.GRU(args['target_agent_emb_size']*3, args['target_agent_enc_size'], batch_first=True)
+            # self.target_past_mixer = leaky_MLP(args['target_agent_emb_size']*2, args['target_agent_emb_size'])
+            # self.target_fut_mixer = leaky_MLP(args['target_agent_emb_size']*2, args['target_agent_emb_size'])
             self.map_aggtor = Att(n_agt=args['target_agent_emb_size'],n_ctx=args['node_enc_size'])
-        else:
-            self.target_fut_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
-            self.target_past_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
+        
+        self.target_fut_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
+        self.target_past_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
             
 
         # Node encoders
         self.node_emb = nn.Linear(args['node_feat_size'], args['node_emb_size'])
         if self.encode_sub_node:
+            self.subnode_emb = nn.Linear(args['node_feat_size'], args['node_emb_size'])
             self.sub_node_encoder = nn.GRU(args['node_emb_size'], args['node_emb_size'], batch_first=True, bidirectional= True)
-        else:
-            self.node_encoder = nn.GRU(args['node_emb_size'], args['node_enc_size'], batch_first=True)
+            self.sub_nbr_encoder = nn.GRU(args['nbr_emb_size'], args['nbr_emb_size'], batch_first=True, bidirectional= True)
+            
 
         # Surrounding agent encoder
         self.nbr_emb = nn.Linear(args['nbr_feat_size'], args['nbr_emb_size'])
-        if self.encode_sub_node:
-             self.sub_nbr_encoder = nn.GRU(args['nbr_emb_size'], args['nbr_emb_size'], batch_first=True, bidirectional= True)
-        else:
+             
+        if self.map_aggregation:
+            self.node_encoder = nn.GRU(args['node_emb_size'], args['node_enc_size'], batch_first=True)
             self.nbr_enc = nn.GRU(args['nbr_emb_size'], args['nbr_enc_size'], batch_first=True)
-        # Agent-node attention
+            # Agent-node attention
             self.query_emb = nn.Linear(args['node_enc_size'], args['node_enc_size'])
             self.key_emb = nn.Linear(args['nbr_enc_size'], args['node_enc_size'])
             self.val_emb = nn.Linear(args['nbr_enc_size'], args['node_enc_size'])
@@ -158,30 +159,30 @@ class PGPEncoder_occ(PredictionEncoder):
             nbr_ped_enc = self.variable_size_gru_encode(nbr_ped_embedding, nbr_ped_masks, self.nbr_enc)
 
             # Agent-node attention
-            nbr_encodings = torch.cat((nbr_vehicle_enc, nbr_ped_enc), dim=1)
-            queries = self.query_emb(lane_node_enc).permute(1, 0, 2)
-            keys = self.key_emb(nbr_encodings).permute(1, 0, 2)
-            vals = self.val_emb(nbr_encodings).permute(1, 0, 2)
-            attn_masks = torch.cat((inputs['agent_node_masks']['agent']['vehicles'],
-                                    inputs['agent_node_masks']['agent']['pedestrians']), dim=2)
-            att_op, _ = self.a_n_att(queries, keys, vals, attn_mask=(1-attn_masks))
-            att_op = att_op.permute(1, 0, 2)
+            # nbr_encodings = torch.cat((nbr_vehicle_enc, nbr_ped_enc), dim=1)
+            # queries = self.query_emb(lane_node_enc).permute(1, 0, 2)
+            # keys = self.key_emb(nbr_encodings).permute(1, 0, 2)
+            # vals = self.val_emb(nbr_encodings).permute(1, 0, 2)
+            # attn_masks = torch.cat((inputs['agent_node_masks']['agent']['vehicles'],
+            #                         inputs['agent_node_masks']['agent']['pedestrians']), dim=2)
+            # att_op, _ = self.a_n_att(queries, keys, vals, attn_mask=(1-attn_masks))
+            # att_op = att_op.permute(1, 0, 2)
             # Concatenate with original node encodings and 1x1 conv
-            lane_node_enc = self.leaky_relu(self.mix(torch.cat((lane_node_enc, att_op), dim=2)))
+            # lane_node_enc = self.leaky_relu(self.mix(torch.cat((lane_node_enc, att_op), dim=2)))
 
             # GAT layers
             adj_mat = self.build_adj_mat(inputs['map_representation']['s_next'], inputs['map_representation']['edge_type'])
             for gat_layer in self.gat:
                 lane_node_enc += gat_layer(lane_node_enc, adj_mat)
-        elif self.encode_sub_node:
+        if self.encode_sub_node:
             # Encode lane sub-nodes
-            lane_node_embedding = self.leaky_relu(self.node_emb(lane_node_feats))
-            gru_lane_feats = node_gru_enc(lane_node_masks, lane_node_embedding, self.sub_node_encoder)
-            lane_node_enc = torch.cat((lane_node_embedding,gru_lane_feats),dim=-1).flatten(1,2)
+            lane_subnode_embedding = self.leaky_relu(self.subnode_emb(lane_node_feats))
+            gru_lane_feats = node_gru_enc(lane_node_masks, lane_subnode_embedding, self.sub_node_encoder)
+            lane_subnode_enc = torch.cat((lane_subnode_embedding,gru_lane_feats),dim=-1).flatten(1,2)
             lane_node_ctrs = lane_node_feats.clone().detach().flatten(1,2)
             lane_node_ctrs[lane_node_masks.flatten(1,2).bool()] = math.inf
             lane_node_ctrs=lane_node_ctrs[:,:,:2]
-            lane_info={'lane_enc':lane_node_enc,'nbr_masks':lane_node_ctrs}
+            lane_info={'lane_enc':lane_subnode_enc,'lane_ctrs':lane_node_ctrs}
             # Encode surrounding agents
             nbr_vehicle_feats = inputs['surrounding_agent_representation']['vehicles']
             nbr_vehicle_feats = torch.cat((nbr_vehicle_feats, torch.zeros_like(nbr_vehicle_feats[:, :, :, 0:1])), dim=-1)
@@ -199,7 +200,7 @@ class PGPEncoder_occ(PredictionEncoder):
             nbr_ctrs = (torch.cat((nbr_vehicle_feats.clone().detach(),nbr_ped_feats.clone().detach()),dim=1).flatten(1,2))[:,:,:2]
             nbr_masks= (torch.cat((nbr_vehicle_masks.clone().detach(),nbr_ped_masks.clone().detach()),dim=1).flatten(1,2))[:,:,:2]
             nbr_ctrs[nbr_masks.bool()]=math.inf
-            nbr_info={'nbr_enc':nbr_enc,'nbr_masks':nbr_ctrs}
+            nbr_info={'nbr_enc':nbr_enc,'nbr_ctrs':nbr_ctrs}
                 
             # Target-node attention
             # tgt_queries = self.leaky_relu(self.nd_tgt_emb(torch.cat((target_past_encdoings, target_future_encdoings), dim=1))).permute(1, 0, 2)
@@ -216,16 +217,19 @@ class PGPEncoder_occ(PredictionEncoder):
             # target_agent_enc={'hist':target_past_encdoings,'future':target_future_encdoings,
             #                 'time_query':target_agent_representation['time_query']}
                             # 'map_info': t_n_att_op}
+        else:
+            lane_info=None
+            nbr_info=None
         ## U-GRU method
         if self.motion_enc_type == 'ugru':
             target_concat_embedding = self.leaky_relu(self.target_concat_emb(concat))
             hist_unpacked,future_unpacked=self.get_ugru_enc(concat_mask,target_concat_embedding,hist_mask,future_mask)
             # concatenate bi-gru output with original feature 
             if self.fuse_map_with_tgt:
-                past_map_info=self.get_attention(hist[:,:,:2], target_past_embedding, lane_ctrs, lane_node_enc)
-                target_past_embedding=torch.cat((past_map_info,target_past_embedding),-1)
-                future_map_info=self.get_attention(future[:,:,:2], target_future_embedding, lane_ctrs, lane_node_enc)
-                target_future_embedding=torch.cat((future_map_info,target_future_embedding),-1)
+                target_past_embedding=self.get_attention(hist[:,:,:2], target_past_embedding, lane_ctrs, lane_node_enc)
+                # target_past_embedding=torch.cat((past_map_info,target_past_embedding),-1)
+                target_future_embedding=self.get_attention(future[:,:,:2], target_future_embedding, lane_ctrs, lane_node_enc)
+                # target_future_embedding=torch.cat((future_map_info,target_future_embedding),-1)
             past_feature=torch.cat((target_past_embedding,hist_unpacked),dim=-1).unsqueeze(1)
             future_feature=torch.cat((target_future_embedding,future_unpacked),dim=-1).unsqueeze(1)
             target_past_encdoings = self.variable_size_gru_encode(past_feature, hist_mask.unsqueeze(1), self.target_past_enc)
@@ -250,7 +254,7 @@ class PGPEncoder_occ(PredictionEncoder):
 
         # Return encodings
         encodings = {'target_agent_encoding': target_agent_enc,
-                     'context_encoding': {'map_info': lane_info,
+                     'context_encoding': {'lane_info': lane_info,
                                           'nbr_info': nbr_info,
                                           'map': None,
                                           'vehicles': None,
@@ -304,7 +308,7 @@ class PGPEncoder_occ(PredictionEncoder):
             ctx_ctrs.append(lane_ctrs[batch_id])
 
         map_enc=self.map_aggtor.forward(agts=query.flatten(0,1), agt_idcs=agt_idcs, agt_ctrs=agt_ctrs, ctx=lane_enc.flatten(0,1), 
-                                ctx_idcs=ctx_idcs, ctx_ctrs=ctx_ctrs, dist_th=20)
+                                ctx_idcs=ctx_idcs, ctx_ctrs=ctx_ctrs, dist_th=15)
         map_enc=map_enc.view(query.shape)
         return map_enc
     

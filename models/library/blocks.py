@@ -410,5 +410,5 @@ def node_gru_enc(masks: Tensor,node_embedding: Tensor, gru: nn.GRU):
         hidden_state_size = gru.hidden_size
         if gru.bidirectional:
             hidden_state_size*=2
-        encoding = torch.zeros((batch_size, max_num, max_len, hidden_state_size), device=node_embedding.device)
+        node_enc = torch.zeros((batch_size, max_num, max_len, hidden_state_size), device=node_embedding.device)
     return node_enc

@@ -18,8 +18,8 @@ if not os.path.isdir(args.output_dir):
     os.mkdir(args.output_dir)
 if not os.path.isdir(os.path.join(args.output_dir, 'results')):
     os.mkdir(os.path.join(args.output_dir, 'results'))
-if not os.path.isdir(os.path.join(args.output_dir, 'results', 'imgs')):
-    os.mkdir(os.path.join(args.output_dir, 'results', 'imgs'))
+if not os.path.isdir(os.path.join(args.output_dir,  'imgs')):
+    os.mkdir(os.path.join(args.output_dir,  'imgs'))
 
 
 # Load config

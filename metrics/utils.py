@@ -95,7 +95,7 @@ def min_mse(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> T
     return err, inds
 
 
-def min_ade(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def min_ade(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor, add_quadratic: bool=False) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     Computes average displacement error for the best trajectory is a set, with respect to ground truth
     :param traj: predictions, shape [batch_size, num_modes, sequence_length, 2]
@@ -111,7 +111,11 @@ def min_ade(traj: torch.Tensor, traj_gt: torch.Tensor, masks: torch.Tensor) -> T
     err = torch.pow(err, exponent=2)
     err = torch.sum(err, dim=3)
     err = torch.pow(err, exponent=0.5)
-    err = torch.sum(err * (1 - masks_rpt), dim=2) / torch.sum((1 - masks_rpt), dim=2)
+    if add_quadratic:
+        quad_err = torch.pow(err, exponent=2)
+        err = torch.sum((err + quad_err) * (1 - masks_rpt), dim=2) / torch.sum((1 - masks_rpt), dim=2)
+    else:
+        err = torch.sum(err * (1 - masks_rpt), dim=2) / torch.sum((1 - masks_rpt), dim=2)
     err, inds = torch.min(err, dim=1)
 
     return err, inds

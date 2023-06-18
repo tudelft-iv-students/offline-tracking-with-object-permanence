@@ -11,6 +11,11 @@ class ADE(Metric):
     def __init__(self, args: Dict):
         self.name = 'ade_' +args['target']
         self.target = args['target']
+        if 'add_quadratic' in args:
+            if args['add_quadratic'] ==True:
+                self.add_quadratic=True
+        else:
+            self.add_quadratic=False
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """
@@ -26,8 +31,10 @@ class ADE(Metric):
             traj = predictions['refined_traj']
         elif self.target=='endpoints':
             traj = predictions['endpoint_traj']
+        elif self.target=='pre-refine':
+            traj = predictions['init_traj']
         else:
-            raise Exception('Target needs to be one of {initial,endpoints or refine}')
+            raise Exception('Target needs to be one of {initial,endpoints, pre_refine or refine}')
         traj_gt = ground_truth['traj'][:,:,:-1] if type(ground_truth) == dict else ground_truth[:,:,:-1]
 
         # Useful params
@@ -44,7 +51,7 @@ class ADE(Metric):
                 else torch.zeros(batch_size, sequence_length).to(traj.device)
 
 
-        errs, _ = min_ade(traj, traj_gt, masks)
+        errs, _ = min_ade(traj, traj_gt, masks,self.add_quadratic)
 
 
         return torch.mean(errs)
