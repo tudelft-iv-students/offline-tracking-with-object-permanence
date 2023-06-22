@@ -1,0 +1,96 @@
+======
+Loading NuScenes tables for version v1.0-mini...
+23 category,
+8 attribute,
+4 visibility,
+911 instance,
+12 sensor,
+120 calibrated_sensor,
+31206 ego_pose,
+8 log,
+10 scene,
+404 sample,
+31206 sample_data,
+18538 sample_annotation,
+4 map,
+Done loading in 1.507 seconds.
+======
+Reverse indexing ...
+Done reverse indexing in 0.1 seconds.
+======
+Computing dataset stats...
+mini batch 1/37
+mini batch 2/37
+mini batch 3/37
+mini batch 4/37
+mini batch 5/37
+mini batch 6/37
+mini batch 7/37
+mini batch 8/37
+mini batch 9/37
+mini batch 10/37
+mini batch 11/37
+mini batch 12/37
+mini batch 13/37
+mini batch 14/37
+mini batch 15/37
+mini batch 16/37
+mini batch 17/37
+mini batch 18/37
+mini batch 19/37
+mini batch 20/37
+mini batch 21/37
+mini batch 22/37
+mini batch 23/37
+mini batch 24/37
+mini batch 25/37
+mini batch 26/37
+mini batch 27/37
+mini batch 28/37
+mini batch 29/37
+mini batch 30/37
+mini batch 31/37
+mini batch 32/37
+mini batch 33/37
+mini batch 34/37
+mini batch 35/37
+mini batch 36/37
+mini batch 37/37
+Extracting pre-processed data...
+mini batch 1/37
+mini batch 2/37
+mini batch 3/37
+mini batch 4/37
+mini batch 5/37
+mini batch 6/37
+mini batch 7/37
+mini batch 8/37
+mini batch 9/37
+mini batch 10/37
+mini batch 11/37
+mini batch 12/37
+mini batch 13/37
+mini batch 14/37
+mini batch 15/37
+mini batch 16/37
+mini batch 17/37
+mini batch 18/37
+mini batch 19/37
+mini batch 20/37
+mini batch 21/37
+mini batch 22/37
+mini batch 23/37
+mini batch 24/37
+mini batch 25/37
+mini batch 26/37
+mini batch 27/37
+mini batch 28/37
+mini batch 29/37
+mini batch 30/37
+mini batch 31/37
+mini batch 32/37
+mini batch 33/37
+mini batch 34/37
+mini batch 35/37
+mini batch 36/37
+mini batch 37/37

@@ -33,6 +33,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
         self.traversal_horizon = args['traversal_horizon']
         self.augment=args['augment']
         self.map_radius_buffer=10
+        self.match=False
         
         
         

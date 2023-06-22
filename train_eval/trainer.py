@@ -9,7 +9,7 @@ import math
 
 import train_eval.utils as u
 from torchvision.utils import make_grid
-from models.decoders.ram_decoder import get_index,get_dense
+from datasets.nuScenes.nuScenes_graphs_match import match_collate
 import os
 from metrics.focal_loss import FocalLoss
 from datasets.nuScenes.prediction import PredictHelper_occ
@@ -21,6 +21,7 @@ from datasets.nuScenes.prediction import PredictHelper_occ
 
 from return_device import return_device
 device = return_device()
+
 
 
 class Trainer:
@@ -47,10 +48,17 @@ class Trainer:
         self.pretrain = cfg['pretrain']
 
         # Initialize dataloaders
-        self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
-                                           num_workers=cfg['num_workers'], pin_memory=True)
-        self.val_dl = torch_data.DataLoader(datasets['val'], cfg['batch_size'], shuffle=False,
+        if "match" in cfg:
+            if cfg['match'] == True:
+                self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
+                                            num_workers=cfg['num_workers'], pin_memory=True,collate_fn=match_collate)
+                self.val_dl = torch_data.DataLoader(datasets['val'], cfg['batch_size'], shuffle=False,
+                                                    num_workers=cfg['num_workers'], pin_memory=True,collate_fn=match_collate)
+        else:
+            self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
                                             num_workers=cfg['num_workers'], pin_memory=True)
+            self.val_dl = torch_data.DataLoader(datasets['val'], cfg['batch_size'], shuffle=False,
+                                                num_workers=cfg['num_workers'], pin_memory=True)
 
         # Initialize model
         self.model = initialize_prediction_model(cfg['encoder_type'], cfg['aggregator_type'], cfg['decoder_type'],

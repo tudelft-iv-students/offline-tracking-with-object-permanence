@@ -7,7 +7,7 @@ import pickle
 from train_eval.initialization import get_specific_args, initialize_dataset
 
 
-def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True, extract=True):
+def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=False, extract=True):
     """
     Main function for pre-processing data
 
@@ -100,6 +100,8 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
             stats[split.name+"_times"]=split.time_lengths
             if split.save_token_list:
                 stats[split.name+"_token_list"]=split.token_list
+        if split.random_rots and split.match:
+            stats["random_rotations"]=split.rot_rads
     # Save stats
     filename = os.path.join(dataset_splits[0].data_dir, 'stats.pickle')
     with open(filename, 'wb') as handle:

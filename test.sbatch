@@ -45,7 +45,7 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 # srun python train.py -c configs/ram.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_ram/ -w ./output/pretrain/checkpoints/1.tar -n 1
 # srun python train.py -c configs/raster_home.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_less_overfit/ -w ./output/test_less_overfit/checkpoints/8.tar -n 3
 # srun python train.py -c configs/raster.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_heatmap/ -w ./output/test_heatmap/checkpoints/5.tar -n 1
-srun python preprocess.py -c configs/preprocess_nuscenes_occ.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph
+srun python preprocess.py -c configs/preprocess_nuscenes_occ_match.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/v1.0-mini/ -d preprocess_graph_match_mini_test/
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 

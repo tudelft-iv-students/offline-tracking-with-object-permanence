@@ -1,14 +1,15 @@
 dataset: 'nuScenes'
-version: 'v1.0-trainval'
+version: 'v1.0-mini'
 agent_setting: 'single_agent'
 input_representation: 'graphs_occ'
 helper: 'occ'
 
 train_set_args:
-  split: 'train'
+  split: 'mini_train'
   t_h: 2
   t_f: 18.5
   split_name: 'train'
+  match: False
   use_home: False
   use_raster: False
   map_extent: [-150, 150, -20, 320]
@@ -30,10 +31,11 @@ train_set_args:
 
 
 val_set_args:
-  split: 'train_val'
+  split: 'mini_val'
   t_h: 2
   t_f: 18.5
   split_name: 'val'
+  match: False
   use_home: False
   use_raster: False
   map_extent: [-150, 150, -20, 320]
@@ -53,10 +55,11 @@ val_set_args:
   adjust_yaw: True
 
 test_set_args:
-  split: 'val'
+  split: 'mini_val'
   t_h: 2
   t_f: 10.0
   use_home: False
+  match: False
   split_name: 'test'
   use_raster: False
   map_extent: [-150, 150, -20, 320]
