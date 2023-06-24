@@ -13,12 +13,42 @@ from numpy import random
 from numpy import linalg as LA
 import numpy.ma as ma
 import os,json,copy
-
+from collections import defaultdict
+import torch
 
 def match_collate(batch_list):
-    mini_batch=None
-    raise NotImplementedError()
-    return mini_batch
+    data_dict = defaultdict(list)
+    for cur_sample in batch_list:
+        for key, val in cur_sample.items():
+            data_dict[key].append(val)
+    # batch_size = len(batch_list)
+    ret = {}
+    max_node_nums=max(data_dict['node_nums'])
+    map_representation = {}
+
+    for key, val in data_dict.items():
+        if key in ['history', 'history_mask','future', 'future_mask']:
+            ret[key] = torch.stack(val,dim=0)
+            
+        elif key in ['lane_node_feats','lane_node_masks','s_next','edge_type','lane_ctrs']:
+            value=torch.stack(val,dim=0)
+            map_representation[key]=value[:,:max_node_nums]
+        # elif key =='map_representation':
+        #     map_rep_dict = defaultdict(list)
+        #     for cur_map in val:
+        #         for k, v in cur_map.items():
+        #             map_rep_dict[k].append(v)
+        #     map_representation = {}
+        #     for k,v in val.items():
+        #         if k in ['lane_node_feats','lane_node_masks','s_next','edge_type','lane_ctrs']:
+        #             value=torch.stack(v,dim=0)
+        #             map_representation[k]=value[:,:max_node_nums]
+        #     ret['map_representation']=map_representation
+        else:
+            ret[key]=val
+    ret['map_representation']=map_representation
+            
+    return ret
 
 class NuScenesGraphs_MATCH(NuScenesVector):
     """
@@ -93,22 +123,59 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             return 0
         else:
             sample=self.load_data(idx)['inputs']
+            
+            sample_dict={
+                'instance_token':sample['instance_token'],
+                'sample_token':sample['sample_token'],
+                'origin':sample['origin'],
+                'node_seq_gt':sample['node_seq_gt']
+                
+            }
+            
+            for k,v in sample['map_representation'].items():
+                if k != 'node_nums':
+                    v=torch.Tensor(v)
+                sample_dict[k]=v
+            
+            history_mask_time = -(random.random()*self.t_h+0.1)
+            target_history_mask=sample['target_agent_representation']['history']['traj'][:,-1]>history_mask_time
+            target_history=sample['target_agent_representation']['history']['traj'][target_history_mask]
+            target_history_velo=sample['target_agent_representation']['history']['velo'][target_history_mask]
+            target_history=np.concatenate((target_history,target_history_velo),axis=-1)
+            target_history=np.concatenate((target_history,np.zeros([int(self.t_h*2)+1-target_history.shape[0],target_history.shape[1]])),axis=0)
+            target_history_mask=np.concatenate((np.zeros([target_history_mask.sum()]),np.ones([int(self.t_h*2)+1-target_history_mask.sum()])),axis=0)
+            target_history_mask=np.repeat(target_history_mask[:,np.newaxis],target_history.shape[1],axis=1)
+            
+            sample_dict['history']=torch.Tensor(target_history)
+            sample_dict['history_mask']=torch.Tensor(target_history_mask)
+            
             last_time=sample['target_agent_representation']['last_time']-0.1
-            mask_time=random.random()*(last_time-1.5)+1.0
+            mask_time=random.random()*(last_time-1.5)+1.5
             target_future_mask=sample['target_agent_representation']['future']['traj'][:,-1]>mask_time
-            target_future=sample['target_agent_representation']['future']['traj'][target_future_mask][-(int(self.t_h*2)+1):]
+            future_velocity=sample['target_agent_representation']['future']['velo'][target_future_mask]
+            target_future=np.concatenate((sample['target_agent_representation']['future']['traj'][target_future_mask],future_velocity),axis=-1)[-(int(self.t_h*2)+1):]
+            
             last_times=np.array(sample['surrounding_agent_representation']['last_times'])-0.1
             mask_times=random.random(last_times.shape)*(last_times-1.5)+1.0
+            # residual=last_times-mask_times
+            # res_mask=residual>2.5
+            # mask_times[res_mask]+=residual[res_mask]*random.random(residual[res_mask].shape)
             vehicles=sample['surrounding_agent_representation']['vehicles']
-            gt=np.concatenate((target_future,np.zeros([vehicles.shape[1]-target_future.shape[0],vehicles.shape[-1]])))[np.newaxis,:,:]
-            gt_mask=gt>0
-            all_vehicles=np.concatenate((gt,vehicles),axis=0)
-
+            gt=np.concatenate((target_future,np.zeros([vehicles.shape[1]-target_future.shape[0],target_future.shape[-1]])))[np.newaxis,:,:]
+            gt_mask=(gt==0)
             mask_times=np.concatenate((mask_times,np.ones(len(vehicles)-len(mask_times)))).reshape(-1,1)
-            masks=np.repeat((vehicles[:,:,-1]>mask_times)[:,:,np.newaxis],vehicles.shape[-1],axis=-1)
+            agent_masks=(vehicles[:,:,-1]<mask_times)
+            vehicles=np.concatenate((vehicles,sample['surrounding_agent_representation']['velocity']),axis=-1)
+            vehicles[agent_masks]=0
+            masks=np.repeat(agent_masks[:,:,np.newaxis],vehicles.shape[-1],axis=-1)
+
             masks=np.concatenate((gt_mask,masks),axis=0)
-            queries={'trajs':all_vehicles,'masks':masks}
-            return sample
+            all_vehicles=np.concatenate((gt,vehicles),axis=0)
+            
+            sample_dict['future']=torch.Tensor(all_vehicles)
+            sample_dict['future_mask']=torch.Tensor(masks)
+            
+            return sample_dict
 
     def compute_stats(self, idx: int) -> Dict[str, int]:
         """
@@ -250,7 +317,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         hist=past_hist[::-1]
         past_velo=(hist[1:,:2]-hist[:-1,:2])/((hist[1:,-1]-hist[:-1,-1]).reshape(-1,1))
         past_velo=np.concatenate((np.zeros([1,2]),past_velo),axis=0)
-        future_velo=(future[:-1,:2]-future[1:,:2])/(((future[1:,-1]-future[:-1,-1])).reshape(-1,1))
+        future_velo=(future[:-1,:2]-future[1:,:2])/(((future[:-1,-1]-future[1:,-1])).reshape(-1,1))
         future_velo=np.concatenate((future_velo,np.zeros([1,2])),axis=0)
 
         # gt_traj=np.flip(gt_coords,0)
@@ -422,7 +489,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
     def get_future_velos(self,vehicles):
         velos=[]
         for track in vehicles:
-            velo=track[:-1,:2]-track[1:,:2]/(((track[1:,-1]-track[:-1,-1])).reshape(-1,1))
+            velo=(track[:-1,:2]-track[1:,:2])/(((track[:-1,-1]-track[1:,-1])).reshape(-1,1))
             velo=np.concatenate((velo,np.zeros([1,2])),axis=0)
             velos.append(velo)
         return velos
