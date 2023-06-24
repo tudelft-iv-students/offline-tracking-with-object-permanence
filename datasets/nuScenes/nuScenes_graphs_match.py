@@ -68,7 +68,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         self.traversal_horizon = args['traversal_horizon']
         self.augment=args['augment']
         self.match = args['match']
-        self.agent_radius_buffer=10
+        self.agent_radius_buffer=20
         self.random_rots=args['random_rots']
         if self.mode == "compute_stats" and self.random_rots:
             self.rot_rads=list((random.random(len(self.token_list))-0.5)*np.pi/2)
@@ -516,7 +516,8 @@ class NuScenesGraphs_MATCH(NuScenesVector):
 
         # While running the dataset class in 'compute_stats' mode:
         if self.mode == 'compute_stats':
-            largest_radius=self.calculate_largest_radius(vehicles,radius)
+            # largest_radius=self.calculate_largest_radius(vehicles,radius)
+            largest_radius=radius+self.agent_radius_buffer
             return len(vehicles), largest_radius
         velos=self.get_future_velos(vehicles)
         # Convert to fixed size arrays for batching
