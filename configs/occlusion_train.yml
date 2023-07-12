@@ -39,7 +39,7 @@ test_set_args:
   use_home: False
   use_raster: False
 
-batch_size: 128
+batch_size: 30
 num_workers: 12
 use_teacher_force: False
 nrow: 6

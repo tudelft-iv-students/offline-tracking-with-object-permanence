@@ -189,13 +189,11 @@ class NuScenesGraphs_OCC(NuScenesVector):
         # Get future information
         coords_fut,global_yaw_fut,time_fut = self.helper.get_future_for_agent(i_t, s_t, seconds=self.t_h+time, in_agent_frame=False,add_yaw_and_time=True)
         sep_idx= np.searchsorted(time_fut, time-0.1)
-        future_rec=np.empty([0,4])
-        concat_future=np.empty([0,5])
+        future_rec=np.empty([0,6])
+        concat_future=np.empty([0,7])
         count=0
         endpoint_time=time_fut[sep_idx]
         for xy,r,t in zip(coords_fut[sep_idx:],global_yaw_fut[sep_idx:],time_fut[sep_idx:]):
-            if random.random()<self.traj_mask_prob and count>=1 and self.mode=='extract_data':
-                continue
             if count==0:
                 origin_fut=(xy[0], xy[1], correct_yaw(quaternion_yaw(Quaternion(r))))
                 if self.use_mid_origin:
@@ -203,7 +201,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
                     if self.adjust_yaw:
                         if np.abs(global_pose[-1]-origin_fut[-1])>np.pi:
                             adjusted_fut_yaw=origin_fut[-1]-np.pi*((origin_fut[-1]-global_pose[-1])//np.pi)
-                            origin[-1]=global_pose[-1]+adjusted_fut_yaw
+                            origin[-1]=(global_pose[-1]+adjusted_fut_yaw)/2
                     if self.random_rots:
                         if random.random()<self.rdm_rot_prob:
                             rot_rad=(random.random()-0.5)*np.pi
@@ -212,8 +210,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
                     origin=tuple(origin)   
                     origin_fut=origin
             local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
-            future_rec=np.concatenate((future_rec,np.asarray([local_pose.__add__((t,))])),0)
-            concat_future=np.concatenate((concat_future,np.asarray([local_pose.__add__((t,1))])),0)
+            local_yaw = local_pose[-1]
+            future_rec=np.concatenate((future_rec,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),t))])),0)
+            concat_future=np.concatenate((concat_future,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),t,1))])),0)
             count+=1
             
         future=[future_rec[::-1]]
@@ -224,16 +223,17 @@ class NuScenesGraphs_OCC(NuScenesVector):
         # x, y co-ordinates in agent's frame of reference
         coords,global_yaw,time_past = self.helper.get_past_for_agent(i_t, s_t, seconds=self.t_h, in_agent_frame=False,add_yaw_and_time=True)
         global_pose=global_pose[:-1].__add__((yaw,))
-        past_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((0,))])
-        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((0,0))])
+        local_pose=self.global_to_local(origin, global_pose)
+        local_yaw=local_pose[-1]
+        past_hist=np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
+        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
         count=0
         for xy,r,t in zip(coords,global_yaw,time_past):
-            
-            if random.random()<self.traj_mask_prob and self.mode=='extract_data':
-                continue
-            local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
-            past_hist=np.concatenate((past_hist,np.asarray([local_pose.__add__((-t,))])),0)
-            concat_hist=np.concatenate((concat_hist,np.asarray([local_pose.__add__((-t,0))])),0)
+            glb_yaw=quaternion_yaw(Quaternion(r))
+            local_pose = self.global_to_local(origin, (xy[0], xy[1], glb_yaw))
+            local_yaw=local_pose[-1]
+            past_hist=np.concatenate((past_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t))])),0)
+            concat_hist=np.concatenate((concat_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t,0))])),0)
             count+=1
         # Zero pad for track histories shorter than t_h
         hist=[past_hist[::-1]]

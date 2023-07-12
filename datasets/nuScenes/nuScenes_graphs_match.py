@@ -22,6 +22,7 @@ def match_collate(batch_list):
         for key, val in cur_sample.items():
             data_dict[key].append(val)
     # batch_size = len(batch_list)
+    batch={}
     ret = {}
     max_node_nums=max(data_dict['node_nums'])
     map_representation = {}
@@ -47,8 +48,11 @@ def match_collate(batch_list):
         else:
             ret[key]=val
     ret['map_representation']=map_representation
-            
-    return ret
+    gt=torch.zeros([ret['future'].shape[0],ret['future'].shape[1],1])
+    gt[:,0]=1
+    batch['ground_truth']=gt
+    batch['inputs']=ret
+    return batch
 
 class NuScenesGraphs_MATCH(NuScenesVector):
     """
@@ -69,6 +73,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         self.augment=args['augment']
         self.match = args['match']
         self.agent_radius_buffer=20
+        self.map_radius_buffer=20
         self.random_rots=args['random_rots']
         if self.mode == "compute_stats" and self.random_rots:
             self.rot_rads=list((random.random(len(self.token_list))-0.5)*np.pi/2)
@@ -122,7 +127,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             self.extract_data(idx)
             return 0
         else:
-            sample=self.load_data(idx)['inputs']
+            sample=copy.deepcopy(self.load_data(idx)['inputs'])
             
             sample_dict={
                 'instance_token':sample['instance_token'],
@@ -141,6 +146,16 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             target_history_mask=sample['target_agent_representation']['history']['traj'][:,-1]>history_mask_time
             target_history=sample['target_agent_representation']['history']['traj'][target_history_mask]
             target_history_velo=sample['target_agent_representation']['history']['velo'][target_history_mask]
+            if self.augment:
+                velo_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
+                location_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
+                yaw_noise=((torch.rand_like(torch.Tensor(target_history[:,0]))-0.5).numpy())*np.pi
+                target_history[:-1,:2]+=location_noise[:-1,:2]
+                target_history_velo+=velo_noise
+                target_history[:-1,2]+=yaw_noise[:-1]
+                target_history[:-1,3]=np.cos(target_history[:-1,2])
+                target_history[:-1,4]=np.sin(target_history[:-1,2])
+                
             target_history=np.concatenate((target_history,target_history_velo),axis=-1)
             target_history=np.concatenate((target_history,np.zeros([int(self.t_h*2)+1-target_history.shape[0],target_history.shape[1]])),axis=0)
             target_history_mask=np.concatenate((np.zeros([target_history_mask.sum()]),np.ones([int(self.t_h*2)+1-target_history_mask.sum()])),axis=0)
@@ -153,7 +168,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             mask_time=random.random()*(last_time-1.5)+1.5
             target_future_mask=sample['target_agent_representation']['future']['traj'][:,-1]>mask_time
             future_velocity=sample['target_agent_representation']['future']['velo'][target_future_mask]
-            target_future=np.concatenate((sample['target_agent_representation']['future']['traj'][target_future_mask],future_velocity),axis=-1)[-(int(self.t_h*2)+1):]
+            target_future=np.concatenate((sample['target_agent_representation']['future']['traj'][target_future_mask],future_velocity),axis=-1)#[-(int(self.t_h*2)+1):]
             
             last_times=np.array(sample['surrounding_agent_representation']['last_times'])-0.1
             mask_times=random.random(last_times.shape)*(last_times-1.5)+1.0
@@ -166,11 +181,23 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             mask_times=np.concatenate((mask_times,np.ones(len(vehicles)-len(mask_times)))).reshape(-1,1)
             agent_masks=(vehicles[:,:,-1]<mask_times)
             vehicles=np.concatenate((vehicles,sample['surrounding_agent_representation']['velocity']),axis=-1)
+                
             vehicles[agent_masks]=0
             masks=np.repeat(agent_masks[:,:,np.newaxis],vehicles.shape[-1],axis=-1)
-
             masks=np.concatenate((gt_mask,masks),axis=0)
             all_vehicles=np.concatenate((gt,vehicles),axis=0)
+            
+            if self.augment:
+                velo_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
+                location_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
+                yaw_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,0]))-0.5).numpy())*np.pi
+
+                all_vehicles[:,:,:2]+=location_noise
+                all_vehicles[:,:,-2:]+=velo_noise
+                all_vehicles[:,:,2]+=yaw_noise
+                all_vehicles[:,:,3]=np.cos(all_vehicles[:,:,2])
+                all_vehicles[:,:,4]=np.sin(all_vehicles[:,:,2])
+                all_vehicles*=(1-masks)
             
             sample_dict['future']=torch.Tensor(all_vehicles)
             sample_dict['future_mask']=torch.Tensor(masks)
@@ -186,7 +213,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         # print("Target finished!")
         num_agents,map_radius = self.get_surrounding_agent_representation(idx, origin=global_pose,radius=target_disp)
         # print("Agents finished!")
-        num_lane_nodes, max_nbr_nodes = self.get_map_representation(idx,map_radius,global_pose)
+        num_lane_nodes, max_nbr_nodes = self.get_map_representation(idx,map_radius+self.map_radius_buffer,global_pose)
         # print("Map finished!")
         stats = {
             'num_lane_nodes': num_lane_nodes,
@@ -219,7 +246,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         radius=self.radius_list[idx].item()
         target_agent_representation,origin,fut_xy = self.get_target_agent_representation(idx)
         surrounding_agent_representation = self.get_surrounding_agent_representation(idx,radius=radius,origin=origin)
-        map_representation = self.get_map_representation(idx,radius=radius,origin=origin)
+        map_representation = self.get_map_representation(idx,radius=radius+self.map_radius_buffer,origin=origin)
         node_seq_gt, evf_gt = self.get_visited_edges(idx, map_representation,fut_xy)
         map_representation = self.add_lane_ctrs(map_representation)
         inputs = {'instance_token': i_t,
@@ -400,7 +427,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
 
         # Add dummy node (0, 0, 0, 0, 0, 0) if no lane nodes are found
         if len(lane_node_feats) == 0:
-            lane_node_feats = [np.zeros((1, 6))]
+            lane_node_feats = [np.zeros((1, 8))]
             e_succ = [[]]
             e_prox = [[]]
 
@@ -418,8 +445,14 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         
         node_nums = len(lane_node_feats)
 
+        for idx,lane in enumerate(lane_node_feats):
+            yaws=lane[:,2].reshape(-1,1)
+            cos=np.cos(yaws)
+            sin=np.sin(yaws)
+            lane_node_feats[idx]=np.concatenate((lane,cos,sin),axis=-1)
+
         # Convert list of lane node feats to fixed size numpy array and masks
-        lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 6)
+        lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 8)
         # lane_node_feats ~ [B,N,L,C] B: batch size; N: max_number of lanes (nodes) in the scene; L: max_length of a lane; 
         # C: channel number for a lane waypoint, which contains x,y location, theta angle, bools inidacting whether the point
         # locates on 'stop_line', 'ped_crossing' polygons and whether it has successor. 
@@ -632,6 +665,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         e_succ = []
         for node_id, lane_id in enumerate(lane_ids):
             e_succ_node = []
+
             if node_id + 1 < len(lane_ids) and lane_id == lane_ids[node_id + 1]:
                 e_succ_node.append(node_id + 1)
             else:
@@ -639,14 +673,18 @@ class NuScenesGraphs_MATCH(NuScenesVector):
                 for outgoing_id in outgoing_lane_ids:
                     if outgoing_id in lane_ids:
                         e_succ_node.append(lane_ids.index(outgoing_id))
+            # for i in range(2,6):
+            #     if node_id + i < len(lane_ids) and lane_id == lane_ids[node_id + i]:
+            #         e_succ_node.append(node_id + i)
 
+            
             e_succ.append(e_succ_node)
 
         return e_succ
 
     @staticmethod
     def get_proximal_edges(lane_node_feats: List[np.ndarray], e_succ: List[List[int]],
-                           dist_thresh=4, yaw_thresh=np.pi/4) -> List[List[int]]:
+                           dist_thresh=8, yaw_thresh=np.pi/4) -> List[List[int]]:
         """
         Returns proximal edge list for each node
         """

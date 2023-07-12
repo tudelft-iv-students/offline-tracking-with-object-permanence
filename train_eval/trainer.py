@@ -52,7 +52,7 @@ class Trainer:
             if cfg['match'] == True:
                 self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,
                                             num_workers=cfg['num_workers'], pin_memory=True,collate_fn=match_collate)
-                self.val_dl = torch_data.DataLoader(datasets['val'], cfg['batch_size'], shuffle=False,
+                self.val_dl = torch_data.DataLoader(datasets['val'], cfg['batch_size'], shuffle=True,
                                                     num_workers=cfg['num_workers'], pin_memory=True,collate_fn=match_collate)
         else:
             self.tr_dl = torch_data.DataLoader(datasets['train'], cfg['batch_size'], shuffle=True,

@@ -17,12 +17,14 @@ from models.encoders.raster_encoder import RasterEncoder
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
 from models.encoders.pgp_encoder_v1 import PGPEncoder_occ
+from models.encoders.match_encoder import MatchEncoder
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention
 from models.aggregators.goal_conditioned import GoalConditioned
 from models.aggregators.home_agg import Sample2DAggregator
 from models.aggregators.home_orig import HomeAggregator
 from models.aggregators.attention_occ import Attention_occ
+from models.aggregators.match_agg import Match_agg
 from models.aggregators.pgp import PGP
 from models.aggregators.ram_agg import RamAggregator
 from models.decoders.mtp import MTP
@@ -34,7 +36,7 @@ from models.decoders.heatmap import HTMAP
 from models.decoders.home_decoder import HomeDecoder
 from models.decoders.home_atten_decoder import HomeDecoder_attn
 from models.decoders.mlp_occ import MLP_occ
-
+from models.decoders.match_decoder import Match_decoder
 # Import metrics
 from metrics.mtp_loss import MTPLoss
 from metrics.min_ade import MinADEK
@@ -50,7 +52,9 @@ from metrics.l1_loss import L1_loss
 from metrics.yaw_loss import Yaw_loss
 from metrics.ade import ADE
 from metrics.mr import MissRate
+from metrics.binary_focal import Binary_focal_loss
 from metrics.drivable_area_loss import DrivablelLoss
+from metrics.match_accuracy import Match_accuracy
 from typing import List, Dict, Union
 
 
@@ -110,7 +114,8 @@ def initialize_encoder(encoder_type: str, encoder_args: Dict):
         'polyline_subgraphs': PolylineSubgraphs,
         'pgp_encoder': PGPEncoder,
         'pgp_encoder_occ': PGPEncoder_occ,
-        'home_encoder':HomeEncoder
+        'home_encoder':HomeEncoder,
+        'match_encoder':MatchEncoder
     }
 
     return encoder_mapping[encoder_type](encoder_args)
@@ -129,7 +134,8 @@ def initialize_aggregator(aggregator_type: str, aggregator_args: Union[Dict, Non
         'attn_occ': Attention_occ,
         'home_agg': HomeAggregator,
         '2D_sample':Sample2DAggregator,
-        'ram':RamAggregator
+        'ram':RamAggregator,
+        'match_agg':Match_agg
     }
 
     if aggregator_args:
@@ -152,7 +158,8 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
         'home':HomeDecoder,
         'ram_decoder':RamDecoder,
         'home_atten':HomeDecoder_attn,
-        'mlp_occ':MLP_occ
+        'mlp_occ':MLP_occ,
+        'match_decoder':Match_decoder
     }
 
     return decoder_mapping[decoder_type](decoder_args)
@@ -179,7 +186,9 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'l1_loss': L1_loss,
         'yaw_loss':Yaw_loss,
         'ade':ADE,
-        'miss_rate':MissRate
+        'miss_rate':MissRate,
+        'binary_focal_loss':Binary_focal_loss,
+        'match_accuracy':Match_accuracy
     }
 
     if metric_args is not None:

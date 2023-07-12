@@ -5,7 +5,7 @@ from typing import Tuple, Union
 import torch.nn as nn
 from torch import Tensor
 from typing import List
-import torch
+import torch, math
 from math import gcd
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 
@@ -301,6 +301,72 @@ class Linear(nn.Module):
             out = self.relu(out)
         return out
     
+class GlobalGraph(nn.Module):
+    r"""
+    Global graph
+
+    It's actually a self-attention.
+    """
+
+    def __init__(self, hidden_size, attention_head_size=None, num_attention_heads=1):
+        super(GlobalGraph, self).__init__()
+        self.num_attention_heads = num_attention_heads
+        self.attention_head_size = hidden_size // num_attention_heads if attention_head_size is None else attention_head_size
+        self.all_head_size = self.num_attention_heads * self.attention_head_size
+
+        self.num_qkv = 1
+
+        self.query = nn.Linear(hidden_size, self.all_head_size * self.num_qkv)
+        self.key = nn.Linear(hidden_size, self.all_head_size * self.num_qkv)
+        self.value = nn.Linear(hidden_size, self.all_head_size * self.num_qkv)
+
+    def get_extended_attention_mask(self, attention_mask):
+        """
+        1 in attention_mask stands for doing attention, 0 for not doing attention.
+
+        After this function, 1 turns to 0, 0 turns to -10000.0
+
+        Because the -10000.0 will be fed into softmax and -10000.0 can be thought as 0 in softmax.
+        """
+        extended_attention_mask = attention_mask.unsqueeze(1)
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        return extended_attention_mask
+
+    def transpose_for_scores(self, x):
+        sz = x.size()[:-1] + (self.num_attention_heads,
+                              self.attention_head_size)
+        # (batch, max_vector_num, head, head_size)
+        x = x.view(*sz)
+        # (batch, head, max_vector_num, head_size)
+        return x.permute(0, 2, 1, 3)
+
+    def forward(self, hidden_states, attention_mask=None, mapping=None, return_scores=False):
+        mixed_query_layer = self.query(hidden_states)
+        mixed_key_layer = nn.functional.linear(hidden_states, self.key.weight)
+        mixed_value_layer = self.value(hidden_states)
+
+        query_layer = self.transpose_for_scores(mixed_query_layer)
+        key_layer = self.transpose_for_scores(mixed_key_layer)
+        value_layer = self.transpose_for_scores(mixed_value_layer)
+
+        attention_scores = torch.matmul(
+            query_layer / math.sqrt(self.attention_head_size), key_layer.transpose(-1, -2))
+        if attention_mask is not None:
+            attention_scores = attention_scores + self.get_extended_attention_mask(attention_mask)
+        attention_probs = nn.Softmax(dim=-1)(attention_scores)
+        
+        context_layer = torch.matmul(attention_probs, value_layer)
+        context_layer = context_layer.permute(0, 2, 1, 3).contiguous()
+        new_context_layer_shape = context_layer.size()[
+                                  :-2] + (self.all_head_size,)
+        context_layer = context_layer.view(*new_context_layer_shape)
+        if return_scores:
+            assert attention_probs.shape[1] == 1
+            attention_probs = torch.squeeze(attention_probs, dim=1)
+            assert len(attention_probs.shape) == 3
+            return context_layer, attention_probs
+        return context_layer
+    
 class Att(nn.Module):
     """
     Attention block to pass context nodes information to target nodes
@@ -387,7 +453,7 @@ class Att(nn.Module):
         agts += res
         agts = self.relu(agts)
         return agts
-    
+
 def node_gru_enc(masks: Tensor,node_embedding: Tensor, gru: nn.GRU):
     masks_for_batching = ~masks[:, :, :, 0].bool()
     masks_for_batching = masks_for_batching.any(dim=-1).unsqueeze(2).unsqueeze(3)
@@ -412,3 +478,20 @@ def node_gru_enc(masks: Tensor,node_embedding: Tensor, gru: nn.GRU):
             hidden_state_size*=2
         node_enc = torch.zeros((batch_size, max_num, max_len, hidden_state_size), device=node_embedding.device)
     return node_enc
+
+
+def get_attention( query_ctrs, query, key_ctrs, value_enc, map_aggtor: Att, query_mask=None,ctx_mask=None):
+    agt_idcs=[]
+    agt_ctrs=[]
+    ctx_idcs=[]
+    ctx_ctrs=[]
+    for batch_id in range(len(query_ctrs)):
+        agt_idcs.append(torch.arange(query_ctrs.shape[1],device=query_ctrs.device).long())
+        agt_ctrs.append(query_ctrs[batch_id])
+        ctx_idcs.append(torch.arange(value_enc.shape[1],device=value_enc.device).long())
+        ctx_ctrs.append(key_ctrs[batch_id])
+
+    map_enc=map_aggtor(agts=query.flatten(0,1), agt_idcs=agt_idcs, agt_ctrs=agt_ctrs, ctx=value_enc.flatten(0,1), 
+                            ctx_idcs=ctx_idcs, ctx_ctrs=ctx_ctrs, dist_th=20, agt_mask=query_mask,ctx_mask=ctx_mask)
+    map_enc=map_enc.view(query.shape)
+    return map_enc

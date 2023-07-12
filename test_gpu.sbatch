@@ -10,10 +10,10 @@
 #SBATCH --partition=cor,general 
 
 # The default Quality of Service is the 'short' QoS (maximum run time: 4 hours)
-#SBATCH --qos=short
+#SBATCH --qos=medium
 
 # The default run (wall-clock) time is 1 minute
-#SBATCH --time=4:00:00
+#SBATCH --time=5:30:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -50,7 +50,9 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 
 # Computations should be started with 'srun'. For example:
 
-srun python train.py -c configs/occlusion_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph -o ./output/test_occ/ugru/double_refine_initial_fusion/ -n 23 -w output/test_occ/ugru/double_refine_initial_fusion/checkpoints/26.tar
+srun python train.py -c configs/match_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_match_add_lane_info -o ./output/test_match/fully_connected_debug -n 30 
+     python train.py -c configs/match_train_augment.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_match_add_lane_info -o ./output/test_match/augmentation_w1.0 -n 30
+    
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 
