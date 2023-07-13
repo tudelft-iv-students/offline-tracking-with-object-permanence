@@ -253,7 +253,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
             # if self.add_reverse_gt:
             #     local_pose_rev = np.asarray([self.global_to_local(origin_fut, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))])
             #     gt_rev= np.concatenate((gt_rev,local_pose_rev),0)
-        dummy_vals=np.ones([len(time_query),4])*np.inf
+        dummy_vals=np.ones([len(time_query),6])*np.inf
         dummy_vals[:,-1]=time_fut[:sep_idx]
         concat_refine_input=[np.concatenate((past_hist[::-1],dummy_vals,future_rec),axis=0)]
         if self.random_tf:
@@ -261,20 +261,20 @@ class NuScenesGraphs_OCC(NuScenesVector):
             query={'query':np.squeeze(time_query,0),'mask':np.squeeze(time_query_masks,0),'endpoints':endpts_query}
             gt_poses, gt_poses_masks = self.list_to_tensor([gt_poses], 1, int((self.t_f-2) * 2 + 1), 3,False)
             concat_refine_input, concat_refine_mask = self.list_to_tensor(concat_refine_input, 1, 
-                                                                        int((self.t_f-2) * 2 + 1)+int(self.t_h * 2 + 1)*2, 4,False)
+                                                                        int((self.t_f-2) * 2 + 1)+int(self.t_h * 2 + 1)*2, 6,False)
         else:
             time_query, time_query_masks = self.list_to_tensor([time_query], 1, int((self.t_f) * 2 + 1), 2,False)
             query={'query':np.squeeze(time_query,0),'mask':np.squeeze(time_query_masks,0),'endpoints':endpts_query}
             gt_poses, gt_poses_masks = self.list_to_tensor([gt_poses], 1, int((self.t_f) * 2 + 1), 3,False)
             concat_refine_input, concat_refine_mask = self.list_to_tensor(concat_refine_input, 1, 
-                                                                        int((self.t_f) * 2 + 1)+int(self.t_h * 2 + 1)*2, 4,False)
+                                                                        int((self.t_f) * 2 + 1)+int(self.t_h * 2 + 1)*2, 6,False)
         # gt_rev, _ = self.list_to_tensor([gt_rev], 1, int((self.t_f-2) * 2 + 1), 3,False)
         ground_truth={'traj':np.squeeze(gt_poses,0),'mask':np.squeeze(gt_poses_masks,0),'endpoints':endpts_gt}
         # if self.add_reverse_gt:
         #     ground_truth['traj_rev']=np.squeeze(gt_rev,0)
-        hist, hist_masks = self.list_to_tensor(hist, 1, int(self.t_h * 2 + 1), 4,False)
-        future, future_masks = self.list_to_tensor(future, 1, int(self.t_h * 2 + 1), 4,False)
-        concat_motion, concat_masks = self.list_to_tensor(concat_motion, 1, int(self.t_h * 2 + 1)*2, 5,False)
+        hist, hist_masks = self.list_to_tensor(hist, 1, int(self.t_h * 2 + 1), 6,False)
+        future, future_masks = self.list_to_tensor(future, 1, int(self.t_h * 2 + 1), 6,False)
+        concat_motion, concat_masks = self.list_to_tensor(concat_motion, 1, int(self.t_h * 2 + 1)*2, 7,False)
         # gt_traj=np.flip(gt_coords,0)
         history={'traj':np.squeeze(hist,0),'mask':np.squeeze(hist_masks,0)}
         future={'traj':np.squeeze(future,0),'mask':np.squeeze(future_masks,0)}
@@ -372,12 +372,19 @@ class NuScenesGraphs_OCC(NuScenesVector):
 
         # Get edge lookup tables
         s_next, edge_type = self.get_edge_lookup(e_succ, e_prox)
+        
+        for idx,lane in enumerate(lane_node_feats):
+            yaws=lane[:,2].reshape(-1,1)
+            cos=np.cos(yaws)
+            sin=np.sin(yaws)
+            lane_node_feats[idx]=np.concatenate((lane,cos,sin),axis=-1)
 
         # Convert list of lane node feats to fixed size numpy array and masks
-        lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 6)
+        lane_node_feats, lane_node_masks = self.list_to_tensor(lane_node_feats, self.max_nodes, self.polyline_length, 8)
         # lane_node_feats ~ [B,N,L,C] B: batch size; N: max_number of lanes (nodes) in the scene; L: max_length of a lane; 
         # C: channel number for a lane waypoint, which contains x,y location, theta angle, bools inidacting whether the point
         # locates on 'stop_line', 'ped_crossing' polygons and whether it has successor. 
+        
         map_representation = {
             'lane_node_feats': lane_node_feats,
             'lane_node_masks': lane_node_masks,
