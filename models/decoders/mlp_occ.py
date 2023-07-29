@@ -22,24 +22,31 @@ class MLP_occ(PredictionDecoder):
         self.init_yaw_decoder=nn.Sequential(leaky_MLP(args['time_emb_size'],args['time_emb_size']),
                                         nn.Linear(args['time_emb_size'],1))
         self.leaky_relu = nn.LeakyReLU()
-        self.traj_emb=leaky_MLP(4, args['traj_feat_size'])
-        self.bi_gru_refiner=nn.GRU((4+args['traj_feat_size']), args['traj_feat_size'], batch_first=True, bidirectional= True)
+        self.traj_emb=leaky_MLP(6, args['traj_feat_size'])
+        self.bi_gru_refiner=nn.GRU((6+args['traj_feat_size']), args['traj_feat_size'], batch_first=True, bidirectional= True)
         self.init_traj_refiner=nn.Sequential(leaky_MLP(args['traj_feat_size']*2,args['traj_feat_size']),
                                                     nn.Linear(args['traj_feat_size'],2))
         self.init_yaw_refiner=nn.Sequential(leaky_MLP(args['traj_feat_size']*2,args['traj_feat_size']),
                                                     nn.Linear(args['traj_feat_size'],1))
         if self.refine:
             self.use_gru=args['use_gru']
+            self.add_nbr = args['add_nbr']
             if self.use_gru:
-                self.traj_encoder=leaky_MLP(4,args['traj_emb_size'])
+                self.traj_encoder=leaky_MLP(6,args['traj_emb_size'])
                 self.lane_aggtor = Att(n_agt=args['traj_emb_size'],n_ctx=args['node_enc_size'])
-                self.nbr_aggtor = Att(n_agt=args['traj_emb_size'],n_ctx=args['nbr_enc_size'])
-                self.mixer=leaky_MLP(args['traj_emb_size']*3+4,args['traj_emb_size']*2)
+                if self.add_nbr:
+                    self.nbr_aggtor = Att(n_agt=args['traj_emb_size'],n_ctx=args['nbr_enc_size'])
+                    self.mixer=leaky_MLP(args['traj_emb_size']*3+6,args['traj_emb_size']*2)
+                    self.query_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
+                    self.key_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
+                    self.val_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
+                else:
+                    self.mixer=leaky_MLP(args['traj_emb_size']*2+6,args['traj_emb_size']*2)
+                    self.query_emb = leaky_MLP(args['traj_emb_size'], args['traj_emb_size'])
+                    self.key_emb = leaky_MLP(args['traj_emb_size'], args['traj_emb_size'])
+                    self.val_emb = leaky_MLP(args['traj_emb_size'], args['traj_emb_size'])
                 self.bi_gru_decoder = nn.GRU(args['traj_emb_size']*2, args['time_emb_size'], batch_first=True, bidirectional= True)
                 self.traj_attn = nn.MultiheadAttention(args['traj_emb_size'], 1)
-                self.query_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
-                self.key_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
-                self.val_emb = leaky_MLP(args['traj_emb_size']*2, args['traj_emb_size'])
                 self.traj_ref_head=nn.Sequential(leaky_MLP(args['time_emb_size']*2,args['time_emb_size']),
                                                     nn.Linear(args['time_emb_size'],2))
                 self.yaw_ref_head=nn.Sequential(leaky_MLP(args['time_emb_size']*2,args['time_emb_size']),
@@ -90,8 +97,8 @@ class MLP_occ(PredictionDecoder):
             base_info=agg_encoding['refine_input']['traj'].clone()
             refine_mask=agg_encoding['refine_input']['mask'].clone()
             fill_in_mask=torch.isinf(base_info)
-            fill_in_vals=torch.cat((initial_traj.clone().squeeze(1),initial_yaw.clone()),-1)
-            extract_mask=(1-(mask.clone().unsqueeze(-1).repeat(1,1,3))).bool()
+            fill_in_vals=torch.cat((initial_traj.clone().squeeze(1),initial_yaw.clone(),torch.cos(initial_yaw),torch.sin(initial_yaw)),-1)
+            extract_mask=(1-(mask.clone().unsqueeze(-1).repeat(1,1,5))).bool()
             base_info[fill_in_mask]=fill_in_vals[extract_mask]
             init_traj_feature=self.traj_emb(base_info)
             traj_mask=refine_mask[:,:,0]
@@ -114,22 +121,26 @@ class MLP_occ(PredictionDecoder):
         if self.refine:
             lane_enc=agg_encoding['lane_info']['lane_enc'] 
             lane_ctrs=agg_encoding['lane_info']['lane_ctrs']
-            nbr_enc=agg_encoding['nbr_info']['nbr_enc'] 
-            nbr_ctrs=agg_encoding['nbr_info']['nbr_ctrs']
+            if self.add_nbr:
+                nbr_enc=agg_encoding['nbr_info']['nbr_enc'] 
+                nbr_ctrs=agg_encoding['nbr_info']['nbr_ctrs']
             if 'refine_input' in agg_encoding:
                 base_info=agg_encoding['refine_input']['traj'].clone()
                 refine_mask=agg_encoding['refine_input']['mask'].clone()
                 fill_in_mask=torch.isinf(base_info)
-                fill_in_vals=torch.cat((traj.clone().squeeze(1),yaw.clone()),-1)
-                extract_mask=(1-(mask.clone().unsqueeze(-1).repeat(1,1,3))).bool()
+                fill_in_vals=torch.cat((traj.clone().squeeze(1),yaw.clone(),torch.cos(yaw),torch.sin(yaw)),-1)
+                extract_mask=(1-(mask.clone().unsqueeze(-1).repeat(1,1,5))).bool()
                 base_info[fill_in_mask]=fill_in_vals[extract_mask]
                 traj_ctrs=base_info[:,:,:2]
                 traj_mask=refine_mask[:,:,0]
 
                 concat_base=self.traj_encoder(base_info)
                 map_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, lane_ctrs, lane_enc, self.lane_aggtor)
-                interact_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, nbr_ctrs, nbr_enc, self.nbr_aggtor)
-                concat_enc=torch.cat((map_enc,interact_enc),-1)
+                if self.add_nbr:
+                    interact_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, nbr_ctrs, nbr_enc, self.nbr_aggtor)
+                    concat_enc=torch.cat((map_enc,interact_enc),-1) 
+                else:
+                    concat_enc=map_enc
                 
                 attn_mask=traj_mask.unsqueeze(1).repeat(1,agg_encoding['refine_input']['mask'].shape[1],1).bool()
                 query_embd=self.query_emb(concat_enc).transpose(0,1)

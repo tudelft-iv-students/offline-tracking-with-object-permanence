@@ -6,7 +6,7 @@ from datasets.interface import TrajectoryDataset
 from datasets.nuScenes.nuScenes_raster import NuScenesRaster
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
 from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
-from datasets.nuScenes.nuScenes_graphs_occ import NuScenesGraphs_OCC
+from datasets.nuScenes.nuScenes_graphs_occ_v2 import NuScenesGraphs_OCC
 from datasets.nuScenes.nuScenes_graphs_match import NuScenesGraphs_MATCH
 
 # Import models
@@ -16,7 +16,7 @@ from models.encoders.home_encoder import HomeEncoder
 from models.encoders.raster_encoder import RasterEncoder
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
-from models.encoders.pgp_encoder_v1 import PGPEncoder_occ
+from models.encoders.pgp_encoder_v2 import PGPEncoder_occ
 from models.encoders.match_encoder import MatchEncoder
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention

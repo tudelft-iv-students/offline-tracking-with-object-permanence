@@ -6,18 +6,18 @@ helper: 'occ'
 
 train_set_args:
   split: 'train'
-  t_h: 2
+  t_h: 2.5
   t_f: 10
   split_name: 'train'
   match: True
   use_home: False
   use_raster: False
-  map_extent: [-150, 150, -50, 320]
+  map_extent: [-150, 150, -100, 320]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 12
   match: True
-  augment: False
+  augment: True
   # random_tf: True
   # mask_prob: 0.8
   # augment_prob: 0.4 
@@ -26,19 +26,19 @@ train_set_args:
   # dep_percent: 0.75
   # traj_mask_prob: 0.2
   random_rots: True
-  rdm_rot_prob: 0.4
+  rdm_rot_prob: 0.8
   adjust_yaw: True
 
 
 val_set_args:
   split: 'train_val'
-  t_h: 2
+  t_h: 2.5
   t_f: 10
   split_name: 'val'
   match: True
   use_home: False
   use_raster: False
-  map_extent: [-150, 150, -50, 320]
+  map_extent: [-150, 150, -100, 320]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 12
@@ -57,13 +57,13 @@ val_set_args:
 
 test_set_args:
   split: 'val'
-  t_h: 2
+  t_h: 2.5
   t_f: 10
   use_home: False
   match: True
   split_name: 'test'
   use_raster: False
-  map_extent: [-150, 150, -50, 320]
+  map_extent: [-150, 150, -100, 320]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 12
@@ -80,6 +80,6 @@ test_set_args:
   # use_mid_origin: True
   random_rots: False
   adjust_yaw: True
-batch_size: 24
+batch_size: 128
 num_workers: 12
 verbosity: True

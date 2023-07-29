@@ -97,9 +97,12 @@ def compute_dataset_stats(dataset_splits: List[TrajectoryDataset], batch_size: i
                 mini_batch_count += 1
     for split in dataset_splits:
         if split.augment:
-            stats[split.name+"_times"]=split.time_lengths
-            if split.save_token_list:
+            if split.match:
                 stats[split.name+"_token_list"]=split.token_list
+            else:
+                stats[split.name+"_times"]=split.time_lengths
+                if split.save_token_list or split.add_static_training_samples:
+                    stats[split.name+"_token_list"]=split.token_list
         if split.random_rots and split.match:
             stats["random_rotations"]=split.rot_rads
     # Save stats

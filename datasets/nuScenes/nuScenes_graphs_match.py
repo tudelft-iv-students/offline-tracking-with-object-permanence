@@ -3,6 +3,7 @@ from datasets.nuScenes.nuScenes_vector import NuScenesVector
 from nuscenes.prediction.input_representation.static_layers import color_by_yaw
 from nuscenes.prediction.input_representation.static_layers import correct_yaw
 from pyquaternion import Quaternion
+from nuscenes.eval.prediction.splits import get_prediction_challenge_split
 from nuscenes.eval.common.utils import quaternion_yaw
 from nuscenes.map_expansion.map_api import NuScenesMap
 from datasets.nuScenes.prediction import PredictHelper_occ
@@ -14,7 +15,35 @@ from numpy import linalg as LA
 import numpy.ma as ma
 import os,json,copy
 from collections import defaultdict
+from nuscenes import NuScenes
 import torch
+from nuscenes.utils.splits import create_splits_scenes
+
+def get_tr_scenes(split:str, nusc: NuScenes):
+    if split not in {'mini_train', 'train'}:
+        raise ValueError("split must be one of (mini_train,  train)")
+    
+    if split == 'train_val':
+        split_name = 'train'
+    else:
+        split_name = split
+
+    scenes = create_splits_scenes()
+    scenes_for_split = scenes[split_name]
+    
+    if split == 'train':
+        scenes_for_split = scenes_for_split[200:]
+    scene_tokens=[]
+    for scene in nusc.scene:
+        if scene['name'] in scenes_for_split:
+            scene_tokens.append(scene['token'])
+    return scene_tokens
+
+def get_categ(my_string):
+    class0=my_string.split(".")[0]
+    if class0=="vehicle" and (my_string.split(".")[1]=="bicycle" or my_string.split(".")[1]=="motorcycle"):
+        class0="bicycle"
+    return class0
 
 def match_collate(batch_list):
     data_dict = defaultdict(list)
@@ -69,19 +98,24 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         """
         super().__init__(mode, data_dir, args, helper)
         self.name=args['split_name']
+        self.split=args['split']
         self.traversal_horizon = args['traversal_horizon']
         self.augment=args['augment']
         self.match = args['match']
-        self.agent_radius_buffer=20
-        self.map_radius_buffer=20
+        self.agent_radius_buffer=10
+        self.map_radius_buffer=10
         self.random_rots=args['random_rots']
         if self.mode == "compute_stats" and self.random_rots:
-            self.rot_rads=list((random.random(len(self.token_list))-0.5)*np.pi/2)
+            if self.name == 'train' and self.augment:
+                self.add_objects()
+            self.rot_rads=list((random.random(len(self.token_list))-0.5)*np.pi)
         # if self.mode == 'compute_stats':
         #     self.origin_list=[]
         #     self.radius_list=[]
         if self.mode != 'compute_stats':
             stats = self.load_stats()
+            if (self.name+"_token_list") in stats:
+                self.token_list=stats[self.name+"_token_list"]
             # print(len(self.origin_list))
             
         
@@ -113,8 +147,98 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             self.max_nbr_nodes = stats['max_nbr_nodes']
             self.num_agents=stats['num_agents']
             self.radius_list=stats[self.name+"_"+"map_radius"]
+            
+    
+    
 
+    def add_objects(self,static_augment_ratio=0.35,dynamic_augment_ratio=0.6):
+        if self.mode == 'compute_stats':
+            category_list = ['vehicle']
+            dynamic_sample_list=[]
+            static_sample_list=[]
+            if self.helper.data.version == 'v1.0-trainval':
+                trainval_token_list= get_prediction_challenge_split('train_val',self.helper.data.dataroot)
+                train_token_list= get_prediction_challenge_split('train',self.helper.data.dataroot)
+                val_token_list= get_prediction_challenge_split('val',self.helper.data.dataroot)
+                trainval_token_list+=train_token_list
+                trainval_token_list+=val_token_list
+            elif self.helper.data.version == 'v1.0-mini':
+                trainval_token_list= get_prediction_challenge_split('mini_train',self.helper.data.dataroot)
+                trainval_token_list+= get_prediction_challenge_split('mini_val',self.helper.data.dataroot)
+            scene_tokens=get_tr_scenes(self.split,self.helper.data)
+            # occ_list=[]
+            # for instance in self.helper.data.instance:
+            #     cat=get_categ(self.helper.data.get('category', instance['category_token'])['name'])
+            #     i_t = instance['token']
+            #     if cat in category_list:
+            #         token=instance['first_annotation_token']
+                    
+            #         for idx in range(instance['nbr_annotations']):
+            #             metadata=self.helper.data.get('sample_annotation', token)
+            #             sample_token=metadata['sample_token']
+            #             sample=self.helper.data.get('sample', sample_token)
+            #             time_step=sample['timestamp']
+            #             num_lidar_pts=metadata['num_lidar_pts']
+            #             if num_lidar_pts<2:
+            #                 occ_list.append(i_t)
+            #                 break
+            #             if idx>=1 and (time_step-prev_time)/1e6 > 1.5:
+            #                 occ_list.append(i_t)
+            #                 break
+            #             token=metadata['next']
+            #             prev_time=time_step
+                            
+            
+            for instance in self.helper.data.instance:
+                cat=get_categ(self.helper.data.get('category', instance['category_token'])['name'])
+                i_t = instance['token']
+                if cat in category_list and instance['nbr_annotations']>30:
+                    token=instance['first_annotation_token']
+                    
+                    for idx in range(instance['nbr_annotations']):
+                        metadata=self.helper.data.get('sample_annotation', token)
+                        
+                        sample_token=metadata['sample_token']
+                        
+                        if idx==0:
+                            sample = self.helper.data.get('sample', sample_token)
+                            instance_scene_token=sample['scene_token']
+                            if not (instance_scene_token in scene_tokens):
+                                break
+                            prev_pose=np.array(metadata['translation'][:-1]).copy()          
+                        # print(num_lidar_pts)
 
+                        displacement=LA.norm(np.array(metadata['translation'][:-1])-np.array(prev_pose),ord=2)
+                        if displacement and displacement>1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
+                            tokens=i_t+'_'+prev_sample
+                            if not (tokens in trainval_token_list):
+                                dynamic_sample_list.append(tokens)
+                            # print('Occlusion happens! \n')
+                        # print(idx)
+                        if  displacement<1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
+                            tokens=i_t+'_'+prev_sample
+                            if not (tokens in trainval_token_list):
+                                static_sample_list.append(tokens)
+                        token=metadata['next']
+                        prev_pose=np.array(metadata['translation'][:-1])
+                        prev_sample=sample_token
+            print("Total sample: ", len(self.token_list))
+            original_length=len(self.token_list)
+            try:
+                self.token_list+=random.sample(static_sample_list,int(original_length*static_augment_ratio))
+            except:
+                self.token_list+=static_sample_list
+            try:
+                self.token_list+=random.sample(dynamic_sample_list,int(original_length*dynamic_augment_ratio))
+            except:
+                self.token_list+=dynamic_sample_list
+            print("Total sample after augmentation: ", len(self.token_list))
+        else:
+            stats = self.load_stats()
+            
+            if self.name+"_token_list" in stats:
+                self.token_list=stats[self.name+"_token_list"]
+            print("Total sample after augmentation: ", len(self.token_list))
         
     def __getitem__(self, idx: int) -> Union[Dict, int]:
         """
@@ -133,7 +257,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
                 'instance_token':sample['instance_token'],
                 'sample_token':sample['sample_token'],
                 'origin':sample['origin'],
-                'node_seq_gt':sample['node_seq_gt']
+                # 'node_seq_gt':sample['node_seq_gt']
                 
             }
             
@@ -147,7 +271,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             target_history=sample['target_agent_representation']['history']['traj'][target_history_mask]
             target_history_velo=sample['target_agent_representation']['history']['velo'][target_history_mask]
             if self.augment:
-                velo_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
+                velo_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*3).numpy()
                 location_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
                 yaw_noise=((torch.rand_like(torch.Tensor(target_history[:,0]))-0.5).numpy())*np.pi
                 target_history[:-1,:2]+=location_noise[:-1,:2]
@@ -188,7 +312,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             all_vehicles=np.concatenate((gt,vehicles),axis=0)
             
             if self.augment:
-                velo_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
+                velo_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*3).numpy()
                 location_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
                 yaw_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,0]))-0.5).numpy())*np.pi
 
@@ -247,15 +371,15 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         target_agent_representation,origin,fut_xy = self.get_target_agent_representation(idx)
         surrounding_agent_representation = self.get_surrounding_agent_representation(idx,radius=radius,origin=origin)
         map_representation = self.get_map_representation(idx,radius=radius+self.map_radius_buffer,origin=origin)
-        node_seq_gt, evf_gt = self.get_visited_edges(idx, map_representation,fut_xy)
+        # node_seq_gt, evf_gt = self.get_visited_edges(idx, map_representation,fut_xy)
         map_representation = self.add_lane_ctrs(map_representation)
         inputs = {'instance_token': i_t,
                   'sample_token': s_t,
                   'map_representation': map_representation,
                   'surrounding_agent_representation': surrounding_agent_representation,
                   'target_agent_representation': target_agent_representation,
-                  'node_seq_gt': node_seq_gt,
-                  'evf_gt': evf_gt,
+                #   'node_seq_gt': node_seq_gt,
+                #   'evf_gt': evf_gt,
                   'origin': np.asarray(origin)}
         # a_n_masks_agnt = self.get_agent_node_masks(inputs['map_representation'], inputs['surrounding_agent_representation'])
         # a_n_masks_trgt = self.get_target_node_masks(inputs['map_representation'], inputs['target_agent_representation'])
@@ -441,7 +565,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             return num_nodes, max_nbrs
 
         # Get edge lookup tables
-        s_next, edge_type = self.get_edge_lookup(e_succ, e_prox)
+        # s_next, edge_type = self.get_edge_lookup(e_succ, e_prox)
         
         node_nums = len(lane_node_feats)
 
@@ -459,8 +583,8 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         map_representation = {
             'lane_node_feats': lane_node_feats,
             'lane_node_masks': lane_node_masks,
-            's_next': s_next,
-            'edge_type': edge_type,
+            # 's_next': s_next,
+            # 'edge_type': edge_type,
             'node_nums':node_nums
         }
 
@@ -478,12 +602,12 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         updated_pose_set = []
         updated_ids = []
         updated_last_times=[]
-
+        range_dist=min(300,radius)
         for m, poses in enumerate(pose_set):
             flag = False
             for n, pose in enumerate(poses):
                 if self.map_extent[2] <= pose[1]:
-                    if LA.norm(pose[:2],ord=2)<radius:
+                    if LA.norm(pose[:2],ord=2)<range_dist:
                         flag = True
                         break
 
@@ -540,50 +664,37 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         vehicles,last_times = self.get_agents_of_type(idx, 'vehicle', origin)
         # pedestrians = self.get_agents_of_type(idx, 'human', time, origin)
         # Discard poses outside map extent
+        vehicles,last_times = self.filter_short_trajs(vehicles,last_times)
+        
         if self.mode == "compute_stats":
-            vehicles,last_times = self.discard_poses_outside_extent(vehicles,last_times,radius=radius+self.agent_radius_buffer)
+            largest_radius=self.calculate_largest_radius(vehicles,radius)
+            vehicles,last_times = self.discard_poses_outside_extent(vehicles,last_times,radius=largest_radius)
         else:
             vehicles,last_times = self.discard_poses_outside_extent(vehicles,last_times,radius=radius)
         # pedestrians = self.discard_poses_outside_extent(pedestrians,radius=radius)
-        vehicles,last_times = self.filter_short_trajs(vehicles,last_times)
+        
 
         # While running the dataset class in 'compute_stats' mode:
         if self.mode == 'compute_stats':
-            # largest_radius=self.calculate_largest_radius(vehicles,radius)
-            largest_radius=radius+self.agent_radius_buffer
             return len(vehicles), largest_radius
         velos=self.get_future_velos(vehicles)
         # Convert to fixed size arrays for batching
-        if self.use_home:
-            vehicles = self.list_to_tensor(vehicles, self.max_vehicles, int(self.t_h * 2 + 1), 5,True)
-            pedestrians = self.list_to_tensor(pedestrians, self.max_pedestrians, int(self.t_h * 2 + 1), 5,True)
-
-            surrounding_agent_representation = {
-                'vehicles': vehicles,
-                'pedestrians': pedestrians
-            }
-        else:
             
-            vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.num_agents, int((self.t_f+self.t_h) * 2 + 1), 6,False)
-            velos,_ = self.list_to_tensor(velos, self.num_agents, int((self.t_f+self.t_h) * 2 + 1), 2,False)
-            # pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, int((self.t_f) * 2 + 1), 4,False)
+        vehicles, vehicle_masks = self.list_to_tensor(vehicles, self.num_agents, int((self.t_f+self.t_h) * 2 + 1), 6,False)
+        velos,_ = self.list_to_tensor(velos, self.num_agents, int((self.t_f+self.t_h) * 2 + 1), 2,False)
+        # pedestrians, pedestrian_masks = self.list_to_tensor(pedestrians, self.max_pedestrians, int((self.t_f) * 2 + 1), 4,False)
 
-            surrounding_agent_representation = {
-                'vehicles': vehicles,
-                'vehicle_masks': vehicle_masks,
-                'last_times':last_times,
-                'velocity':velos
-                # 'pedestrians': pedestrians,
-                # 'pedestrian_masks': pedestrian_masks
-            }
-        if self.use_raster:
-            i_t, s_t = self.token_list[idx].split("_")
-            img = self.agent_rasterizer.make_representation(i_t, s_t)
-            img = np.moveaxis(img, -1, 0)
-            img = img.astype(float) / 255
-            surrounding_agent_representation['image']=img
+        surrounding_agent_representation = {
+            'vehicles': vehicles,
+            'vehicle_masks': vehicle_masks,
+            'last_times':last_times,
+            'velocity':velos
+            # 'pedestrians': pedestrians,
+            # 'pedestrian_masks': pedestrian_masks
+        }
 
         return surrounding_agent_representation
+    
     def get_agents_of_type(self, idx: int, agent_type: str, origin=None) -> List[np.ndarray]:
         """
         Returns surrounding agents of a particular class for a given sample

@@ -10,6 +10,7 @@ from nuscenes.prediction.helper import convert_local_coords_to_global
 from nuscenes.eval.prediction.data_classes import Prediction
 import json
 from datasets.nuScenes.prediction import PredictHelper_occ
+from datasets.nuScenes.nuScenes_graphs_match import match_collate
 
 
 # Initialize device:
@@ -37,7 +38,11 @@ class Evaluator:
         test_set = initialize_dataset(ds_type, ['load_data', data_dir, cfg['test_set_args']] + spec_args)
 
         # Initialize dataloader
-        self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'])
+        if "match" in cfg:
+            if cfg['match'] == True:
+                self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'],collate_fn=match_collate)
+        else:
+            self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'])
 
         # Initialize model
         self.model = initialize_prediction_model(cfg['encoder_type'], cfg['aggregator_type'], cfg['decoder_type'],
@@ -86,8 +91,8 @@ class Evaluator:
                 predictions = self.model(data['inputs'])
                 if self.add_img and (i+1) % self.add_img_period==0:
                     file_name='Batch'+str(i)
-                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, output_dir+'imgs', file_name, 'raw')
-                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, output_dir+'imgs', file_name, 'refine')
+                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, os.path.join(output_dir,'imgs'), file_name, 'raw')
+                    u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, os.path.join(output_dir,'imgs'), file_name, 'refine')
                 # Aggregate metrics
                 agg_metrics = self.aggregate_metrics(agg_metrics, predictions, data['ground_truth'])
 
@@ -119,8 +124,10 @@ class Evaluator:
         minibatch_metrics = {}
         for metric in self.metrics:
             minibatch_metrics[metric.name] = metric.compute(model_outputs, ground_truth).item()
-
-        batch_size = ground_truth['traj'].shape[0]
+        try:
+            batch_size = ground_truth['traj'].shape[0]
+        except:
+            batch_size = ground_truth.shape[0]
         agg_metrics['sample_count'] += batch_size
 
         for metric in self.metrics:

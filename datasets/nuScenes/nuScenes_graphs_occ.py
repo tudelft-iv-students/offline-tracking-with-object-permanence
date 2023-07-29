@@ -70,6 +70,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
                 if self.name+"_token_list" in stats:
                     self.token_list=stats[self.name+"_token_list"]
             self.max_nbr_nodes = stats['max_nbr_nodes']
+            self.max_nodes = stats['num_lane_nodes']
+            self.max_vehicles = stats['num_vehicles']
+            self.max_pedestrians = stats['num_pedestrians']
         elif self.mode == "load_miss_anns":
             self.load_miss_stats(args)
         elif self.mode == 'load_data':
@@ -226,7 +229,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
         local_pose=self.global_to_local(origin, global_pose)
         local_yaw=local_pose[-1]
         past_hist=np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
-        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
+        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0,0))])
         count=0
         for xy,r,t in zip(coords,global_yaw,time_past):
             glb_yaw=quaternion_yaw(Quaternion(r))

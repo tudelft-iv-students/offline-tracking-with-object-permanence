@@ -192,7 +192,7 @@ class MatchEncoder(PredictionEncoder):
                         'context_encoding': {'lane_enc': lane_node_encodings,
                                             'lane_mask': lane_node_masks,
                                             'lane_ctrs':inputs['map_representation']['lane_ctrs'],
-                                            's_next':inputs['map_representation']['s_next']
+                                            # 's_next':inputs['map_representation']['s_next']
                                             },
                         }
 

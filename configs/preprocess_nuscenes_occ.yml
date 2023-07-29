@@ -1,12 +1,12 @@
 dataset: 'nuScenes'
-version: 'v1.0-mini'
+version: 'v1.0-trainval'
 agent_setting: 'single_agent'
 input_representation: 'graphs_occ'
 helper: 'occ'
 
 train_set_args:
-  split: 'mini_train'
-  t_h: 2
+  split: 'train'
+  t_h: 2.5
   t_f: 18.5
   split_name: 'train'
   match: False
@@ -17,22 +17,21 @@ train_set_args:
   polyline_length: 20
   traversal_horizon: 15
   augment: True
-  random_tf: True
-  mask_prob: 0.8
-  augment_prob: 0.4 
   augment_min: 1.5
+  random_tf: True
   dep_thresh: 12
   dep_percent: 0.75
   traj_mask_prob: 0.2
   use_mid_origin: True
   random_rots: True
-  rdm_rot_prob: 0.4
+  rdm_rot_prob: 0.75
   adjust_yaw: True
+  add_static_training_samples: True
 
 
 val_set_args:
-  split: 'mini_val'
-  t_h: 2
+  split: 'train_val'
+  t_h: 2.5
   t_f: 18.5
   split_name: 'val'
   match: False
@@ -43,21 +42,20 @@ val_set_args:
   polyline_length: 20
   traversal_horizon: 15
   augment: True
-  random_tf: True
-  mask_prob: 0.8
-  augment_prob: 0.4 
   augment_min: 1.5
+  random_tf: True
   dep_thresh: 9
   dep_percent: 0.75
   traj_mask_prob: 0.2
   use_mid_origin: True
   random_rots: False
   adjust_yaw: True
+  add_static_training_samples: False
 
 test_set_args:
-  split: 'mini_val'
-  t_h: 2
-  t_f: 10.0
+  split: 'val'
+  t_h: 2.0
+  t_f: 6.0
   use_home: False
   match: False
   split_name: 'test'
@@ -68,16 +66,15 @@ test_set_args:
   traversal_horizon: 15
   augment: True
   augment: True
-  random_tf: False
-  mask_prob: 0.8
-  augment_prob: 0.4 
   augment_min: 1.5
+  random_tf: False
   dep_thresh: 9
   dep_percent: 0.75
   traj_mask_prob: 0.2
   use_mid_origin: True
   random_rots: False
   adjust_yaw: True
-batch_size: 36
+  add_static_training_samples: False
+batch_size: 64
 num_workers: 12
 verbosity: True

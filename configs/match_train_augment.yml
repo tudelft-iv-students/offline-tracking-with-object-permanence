@@ -9,10 +9,10 @@ match: True
 train_set_args: &ds_args
   split_name: 'train'
   split: 'train'
-  t_h: 2
+  t_h: 2.5
   t_f: 10
   match: True
-  map_extent: [ -120, 120, -80, 160 ]
+  map_extent: [ -120, 120, -100, 160 ]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 12
@@ -44,13 +44,15 @@ test_set_args:
   use_raster: False
   augment: False
 
+# batch_size: 64
 batch_size: 160
 num_workers: 12
 use_teacher_force: False
 nrow: 6
-pretrain: True
+pretrain: False
 pretrain_epcs: 1
 visualize_start_epoch: 0
+fade_epcs: 47
 
 
 # Encoder parameters
@@ -88,7 +90,7 @@ decoder_args:
 
 # Optimizer parameters
 optim_args:
-  lr: 0.001
+  lr: 0.0005
   scheduler_step: 10
   scheduler_gamma: 0.6
 
@@ -120,8 +122,8 @@ tr_metric_args:
 
 val_metrics: [ 'match_accuracy','match_accuracy','binary_focal_loss','binary_focal_loss']
 val_metric_args:
-  - target: 'map'
   - target: 'motion'
+  - target: 'map'
   - target: 'motion'
     alpha: 0.25
     gamma: 2.0

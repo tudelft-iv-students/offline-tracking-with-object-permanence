@@ -13,7 +13,7 @@
 #SBATCH --qos=short
 
 # The default run (wall-clock) time is 1 minute
-#SBATCH --time=3:00:00
+#SBATCH --time=4:00:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -23,7 +23,7 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=20gb
+#SBATCH --mem=24gb
 
 
 # Set mail type to 'END' to receive a mail when the job finishes
@@ -45,7 +45,7 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 # srun python train.py -c configs/ram.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_ram/ -w ./output/pretrain/checkpoints/1.tar -n 1
 # srun python train.py -c configs/raster_home.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_less_overfit/ -w ./output/test_less_overfit/checkpoints/8.tar -n 3
 # srun python train.py -c configs/raster.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_raster -o ./output/test_heatmap/ -w ./output/test_heatmap/checkpoints/5.tar -n 1
-srun python preprocess.py -c configs/preprocess_nuscenes_occ_match.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/v1.0-mini/ -d preprocess_graph_match_mini_test/
+srun python preprocess.py -c configs/preprocess_nuscenes_occ_match.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d preprocess_graph_match_augment/
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
 

@@ -13,7 +13,7 @@
 #SBATCH --qos=medium
 
 # The default run (wall-clock) time is 1 minute
-#SBATCH --time=5:30:00
+#SBATCH --time=12:00:00
 
 # The default number of parallel tasks per job is 1
 #SBATCH --ntasks=1
@@ -23,7 +23,7 @@
 #SBATCH --cpus-per-task=4
 
 # The default memory per node is 1024 megabytes (1GB) (for multiple tasks, specify --mem-per-cpu instead)
-#SBATCH --mem=24gb
+#SBATCH --mem=22gb
 
 # Request a GPU
 #SBATCH --gres=gpu:v100:1
@@ -50,8 +50,9 @@ cd /tudelft.net/staff-umbrella/stanliu/code/pgp/PGP/
 
 # Computations should be started with 'srun'. For example:
 
-srun python train.py -c configs/match_train.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_match_add_lane_info -o ./output/test_match/fully_connected_debug -n 30 
-     python train.py -c configs/match_train_augment.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_match_add_lane_info -o ./output/test_match/augmentation_w1.0 -n 30
+# srun python train.py -c configs/occlusion_train_v2.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_occ_v2_augment -o ./output/test_occ/ugru/v2_no_map_agg -n 50
+
+srun python train.py -c configs/match_train_augment_only_motion.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_graph_match_augment -o ./output/test_match/augmentation_add_data_only_motion/ -n 50
     
      #python train.py -c configs/raster_home_1.yml -r /tudelft.net/staff-umbrella/stanliu/data/nuScenes/ -d ./preprocess_home -o ./output/test_home_original_slow/ -n 16
 #srun  --exclusive --ntasks=1 
