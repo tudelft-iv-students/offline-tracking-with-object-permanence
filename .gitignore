@@ -162,3 +162,4 @@ nuscenes-prediction-challenge-trajectory-sets/
 *.err
 *.out
 slurm*
+./*.pickle
