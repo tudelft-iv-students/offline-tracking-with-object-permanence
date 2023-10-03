@@ -1,0 +1,136 @@
+# Dataset and dataloader parameters
+dataset: 'nuScenes'
+version: 'v1.0-trainval'
+# version: 'v1.0-mini'
+agent_setting: 'single_agent'
+input_representation: 'match'
+match: True
+
+train_set_args: &ds_args
+  split_name: 'train'
+  split: 'train'
+  t_h: 2.5
+  t_f: 10
+  match: True
+  map_extent: [ -120, 120, -100, 160 ]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 12
+  random_flips: False
+  random_rots: True
+  use_home: False
+  use_raster: False
+  augment: True
+  evaluate: False
+
+val_set_args:
+  <<: *ds_args
+  split_name: 'val'
+  split: 'train_val'
+  match: True
+  random_rots: False
+  random_flips: False
+  use_home: False
+  use_raster: False
+  augment: False
+  evaluate: True
+
+test_set_args:
+  <<: *ds_args
+  split_name: 'test'
+  split: 'val'
+  match: True
+  random_flips: False
+  random_rots: False
+  use_home: False
+  use_raster: False
+  augment: False
+  evaluate: True
+
+batch_size: 192
+# batch_size: 160
+num_workers: 12
+use_teacher_force: False
+nrow: 6
+pretrain: False
+pretrain_epcs: 1
+visualize_start_epoch: 0
+fade_epcs: 47
+
+
+# Encoder parameters
+encoder_type: 'match_encoder'
+encoder_args:
+  fuse_map: False
+  target_feat_size: 8
+  target_emb_size: 16
+  past_enc_size: 24
+  node_feat_size: 8
+  node_emb_size: 16
+  node_enc_size: 48
+  future_enc_size: 64
+  lane_enc_size: 64
+  
+
+
+
+
+# Aggregator parameters
+aggregator_type: 'match_agg'
+aggregator_args:
+  agg_method: 'none'
+  node_enc_size: 64
+  att_hidden_size: 32
+
+# Decoder parameters
+decoder_type: 'match_decoder'
+decoder_args:
+  fuse_map: False
+  hist_enc_size: 24
+  future_enc_size: 64
+  node_enc_size: 64
+  input_size: 88
+
+# Optimizer parameters
+optim_args:
+  lr: 0.0005
+  scheduler_step: 10
+  scheduler_gamma: 0.8
+
+
+# losses: ['ade', 'yaw_loss','ade', 'yaw_loss']
+losses: ['binary_focal_loss','binary_focal_loss']
+loss_weights: [1.0,1.0]
+loss_args:
+  - target: 'motion'
+    alpha: 0.25
+    gamma: 2.0
+  - target: 'map'
+    alpha: 0.25
+    gamma: 2.0
+
+
+
+
+tr_metrics: ['match_accuracy','match_accuracy','binary_focal_loss','binary_focal_loss']
+tr_metric_args:
+  - target: 'map'
+  - target: 'motion'
+  - target: 'motion'
+    alpha: 0.25
+    gamma: 2.0
+  - target: 'map'
+    alpha: 0.25
+    gamma: 2.0
+
+val_metrics: [ 'match_accuracy','match_accuracy','binary_focal_loss']
+val_metric_args:
+  - target: 'motion'
+  - target: 'baseline'
+  - target: 'motion'
+    alpha: 0.25
+    gamma: 2.0
+
+
+
+log_freq: 100

@@ -95,7 +95,6 @@ class NuScenesGraphs_OCC(NuScenesVector):
         # Load dataset stats (max nodes, max agents etc.)
         if self.mode == 'extract_data':
             stats = self.load_stats()
-            
             if self.augment:
                 self.time_lengths = stats[self.name+"_times"]
                 if self.name+"_token_list" in stats:
@@ -108,12 +107,13 @@ class NuScenesGraphs_OCC(NuScenesVector):
             self.load_miss_stats(args)
         elif self.mode == 'load_data':
             self.augment_input=args['augment_input']
+            self.flip_yaw=True
             if (self.t_f>6.0 and self.name == 'test') or self.add_static_training_samples:
                 stats = self.load_stats()
                 self.token_list=stats[self.name+"_token_list"]
             
     
-    def add_objects(self,static_augment_ratio=0.3,dynamic_augment_ratio=0.5):
+    def add_objects(self,static_augment_ratio=0.25,dynamic_augment_ratio=0.5):
         if self.mode == 'compute_stats':
             category_list = ['vehicle']
             dynamic_sample_list=[]
@@ -171,7 +171,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
                         # print(num_lidar_pts)
 
                         displacement=LA.norm(np.array(metadata['translation'][:-1])-np.array(prev_pose),ord=2)
-                        if displacement and displacement>1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
+                        if  displacement>1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
                             tokens=i_t+'_'+prev_sample
                             if not (tokens in trainval_token_list):
                                 dynamic_sample_list.append(tokens)
@@ -270,39 +270,50 @@ class NuScenesGraphs_OCC(NuScenesVector):
             else:
                 refine_input=inputs['target_agent_representation']['refine_input'][hist_length-history_frames:-(future_length-future_frames)]
             if self.augment_input:
-                history_loc_noise=np.random.randn(*history[:,:2].shape)*1.2
-                history_yaw_noise=np.random.randn(*history[:,2].shape)*np.pi/3
-                history[:,:2]+=history_loc_noise
-                concat_motion[:history_frames,:2]+=history_loc_noise
-                refine_input[:history_frames,:2]+=history_loc_noise
-                history[:,2]+=history_yaw_noise
-                concat_motion[:history_frames,2]+=history_yaw_noise[::-1]
-                refine_input[:history_frames,2]+=history_yaw_noise[::-1]
-                history[:,3]=np.cos(history[:,2])
-                history[:,4]=np.sin(history[:,2])
-                concat_motion[:history_frames,3]=np.cos(concat_motion[:history_frames,2])
-                refine_input[:history_frames,3]=np.cos(refine_input[:history_frames,2])
-                concat_motion[:history_frames,4]=np.sin(concat_motion[:history_frames,2])
-                refine_input[:history_frames,4]=np.sin(refine_input[:history_frames,2])
-                
-                future_loc_noise=np.random.randn(*future[:,:2].shape)*1.2
-                future_yaw_noise=np.random.randn(*future[:,2].shape)*np.pi/3
-                future[:,:2]+=future_loc_noise
-                concat_motion[-future_frames:,:2]+=future_loc_noise[::-1]
-                refine_input[-future_frames:,:2]+=future_loc_noise[::-1]
-                future[:,2]+=future_yaw_noise
-                concat_motion[-future_frames:,2]+=future_yaw_noise[::-1]
-                refine_input[-future_frames:,2]+=future_yaw_noise[::-1]
-                future[:,3]=np.cos(future[:,2])
-                future[:,4]=np.sin(future[:,2])
-                concat_motion[-future_frames:,3]=np.cos(concat_motion[-future_frames:,2])
-                refine_input[-future_frames:,3]=np.cos(refine_input[-future_frames:,2])
-                concat_motion[-future_frames:,4]=np.sin(concat_motion[-future_frames:,2])
-                refine_input[-future_frames:,4]=np.sin(refine_input[-future_frames:,2])
+                if random.random() < 0.5:
+                    history_loc_noise=np.random.randn(*history[:,:2].shape)*0.2
+                    history_yaw_noise=np.random.randn(*history[:,2].shape)*np.pi/10
+                    if self.flip_yaw and random.random() < 0.5:
+                        history_yaw_noise=np.round(np.clip(np.random.randn(*history[:,2].shape)*0.8,a_min=-1,a_max=1))*np.pi
+                    history[:,:2]+=history_loc_noise
+                    concat_motion[:history_frames,:2]+=history_loc_noise
+                    refine_input[:history_frames,:2]+=history_loc_noise
+                    history[:,2]+=history_yaw_noise
+                    concat_motion[:history_frames,2]+=history_yaw_noise[::-1]
+                    refine_input[:history_frames,2]+=history_yaw_noise[::-1]
+                    history[:,3]=np.cos(history[:,2])
+                    history[:,4]=np.sin(history[:,2])
+                    concat_motion[:history_frames,3]=np.cos(concat_motion[:history_frames,2])
+                    refine_input[:history_frames,3]=np.cos(refine_input[:history_frames,2])
+                    concat_motion[:history_frames,4]=np.sin(concat_motion[:history_frames,2])
+                    refine_input[:history_frames,4]=np.sin(refine_input[:history_frames,2])
+                    
+                    future_loc_noise=np.random.randn(*future[:,:2].shape)*0.2
+                    future_yaw_noise=np.random.randn(*future[:,2].shape)*np.pi/10
+                    if self.flip_yaw and random.random() < 0.5:
+                        future_yaw_noise=np.round(np.clip(np.random.randn(*future[:,2].shape)*0.8,a_min=-1,a_max=1))*np.pi
+                    future[:,:2]+=future_loc_noise
+                    concat_motion[-future_frames:,:2]+=future_loc_noise[::-1]
+                    refine_input[-future_frames:,:2]+=future_loc_noise[::-1]
+                    future[:,2]+=future_yaw_noise
+                    concat_motion[-future_frames:,2]+=future_yaw_noise[::-1]
+                    refine_input[-future_frames:,2]+=future_yaw_noise[::-1]
+                    future[:,3]=np.cos(future[:,2])
+                    future[:,4]=np.sin(future[:,2])
+                    concat_motion[-future_frames:,3]=np.cos(concat_motion[-future_frames:,2])
+                    refine_input[-future_frames:,3]=np.cos(refine_input[-future_frames:,2])
+                    concat_motion[-future_frames:,4]=np.sin(concat_motion[-future_frames:,2])
+                    refine_input[-future_frames:,4]=np.sin(refine_input[-future_frames:,2])
             hist, hist_masks = self.list_to_tensor([history], 1, int(self.t_h * 2 + 1), 6,False)
             future, future_masks = self.list_to_tensor([future], 1, int(self.t_h * 2 + 1), 6,False)
             concat_motion, concat_masks = self.list_to_tensor([concat_motion], 1, int(self.t_h * 2 + 1)*2, 7,False)
             concat_refine_input, concat_refine_mask = self.list_to_tensor([refine_input], 1, 1+int((self.t_f-self.t_h) * 2 + 1)+int(self.t_h * 2 + 1)*2, 6,False)
+            
+            reversed_query = inputs['target_agent_representation']['time_query']['query'].copy()
+            temp_mask = (1-inputs['target_agent_representation']['time_query']['mask'][:,0]).astype(np.bool)
+            reversed_query[temp_mask]=reversed_query[temp_mask][::-1]
+            inputs['target_agent_representation']['time_query']['query']=reversed_query
+            
             history={'traj':np.squeeze(hist,0),'mask':np.squeeze(hist_masks,0)}
             future={'traj':np.squeeze(future,0),'mask':np.squeeze(future_masks,0)}
             concat={'traj':np.squeeze(concat_motion,0),'mask':np.squeeze(concat_masks,0)}

@@ -23,9 +23,13 @@ class Match_accuracy(Metric):
         """
         # Unpack arguments
         if self.target=='motion':
-            x=predictions['scores'].squeeze(-1)
+            x=predictions['scores'].squeeze(-1).clone()
         elif self.target=='map':
-            x=predictions['map_scores'].squeeze(-1)
+            x=predictions['map_scores'].squeeze(-1).clone()
+        elif self.target=='baseline':
+            x=predictions['baseline'].squeeze(-1).clone()
+        elif self.target=='sum':
+            x=(predictions['map_scores'].squeeze(-1).clone()+predictions['scores'].squeeze(-1).clone())/2
         mask=predictions['masks'][:,:,:,0]
         selections=torch.argmax(x,dim=-1)
         acc=(selections==0).sum()/x.shape[0]

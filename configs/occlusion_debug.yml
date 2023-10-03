@@ -57,7 +57,7 @@ visualize_start_epoch: 25
 # Encoder parameters
 encoder_type: 'pgp_encoder_occ'
 encoder_args:
-  map_aggregation: True
+  map_aggregation: False
   motion_enc_type: 'ugru'
   target_agent_feat_size: 6
   target_agent_emb_size: 24
@@ -69,7 +69,7 @@ encoder_args:
   nbr_emb_size: 16
   nbr_enc_size: 32
   num_gat_layers: 2
-  fuse_map_with_tgt: True
+  fuse_map_with_tgt: False
   encode_sub_node: True
   concat_latest: False
   # map_size: 36
@@ -114,7 +114,7 @@ optim_args:
 
 
 # losses: ['ade', 'yaw_loss','ade', 'yaw_loss']
-losses: ['ade', 'yaw_loss', 'ade', 'yaw_loss', 'ade', 'yaw_loss', 'ade', 'yaw_loss']
+losses: ['huber', 'yaw_loss', 'huber', 'yaw_loss', 'huber', 'yaw_loss', 'huber', 'yaw_loss']
 loss_weights: [1.0, 0.5, 1, 0.5, 1.5, 0.5, 0.5, 0.5]
 loss_args:
   - target: 'pre-refine'   

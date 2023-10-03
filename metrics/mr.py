@@ -12,7 +12,7 @@ class MissRate(Metric):
     def __init__(self, args: Dict):
         self.dist_thresh = args['dist_thresh']
         self.target=args['target']
-        self.name = 'MR'
+        self.name = 'MR_'+args['target']
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """

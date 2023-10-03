@@ -49,6 +49,7 @@ from metrics.pi_bc import PiBehaviorCloning
 from metrics.goal_pred_nll import GoalPredictionNLL
 from metrics.focal_loss import FocalLoss
 from metrics.l1_loss import L1_loss
+from metrics.huber import Huber
 from metrics.yaw_loss import Yaw_loss
 from metrics.ade import ADE
 from metrics.mr import MissRate
@@ -188,7 +189,8 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'ade':ADE,
         'miss_rate':MissRate,
         'binary_focal_loss':Binary_focal_loss,
-        'match_accuracy':Match_accuracy
+        'match_accuracy':Match_accuracy,
+        'huber':Huber
     }
 
     if metric_args is not None:

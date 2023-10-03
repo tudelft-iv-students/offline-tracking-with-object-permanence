@@ -12,7 +12,7 @@ train_set_args: &ds_args
   t_h: 2.5
   t_f: 10
   match: True
-  map_extent: [ -120, 120, -80, 160 ]
+  map_extent: [ -120, 120, -100, 160 ]
   polyline_resolution: 1
   polyline_length: 20
   traversal_horizon: 12
@@ -21,6 +21,7 @@ train_set_args: &ds_args
   use_home: False
   use_raster: False
   augment: True
+  evaluate: False
 
 val_set_args:
   <<: *ds_args
@@ -32,6 +33,7 @@ val_set_args:
   use_home: False
   use_raster: False
   augment: False
+  evaluate: True
 
 test_set_args:
   <<: *ds_args
@@ -43,6 +45,7 @@ test_set_args:
   use_home: False
   use_raster: False
   augment: False
+  evaluate: True
 
 batch_size: 64
 num_workers: 12
@@ -51,7 +54,7 @@ nrow: 6
 pretrain: False
 pretrain_epcs: 1
 visualize_start_epoch: 0
-fade_epcs: 47
+fade_epcs: 55
 
 
 # Encoder parameters
@@ -89,7 +92,7 @@ decoder_args:
 
 # Optimizer parameters
 optim_args:
-  lr: 0.0005
+  lr: 0.001
   scheduler_step: 10
   scheduler_gamma: 0.6
 

@@ -154,6 +154,7 @@ def visualize(inputs: Dict,ground_truth: Dict,predictions: Dict,helper: PredictH
         for x, y, dx, dy in zip(xsl, ysl, dxsl, dysl):
             ax.arrow(x, y, dx, dy, width=0.5, color=(1,0.5,0,0.3))
         ax.imshow(image)
+        ax.grid(False)
         fig.canvas.draw()
         image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
         image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))

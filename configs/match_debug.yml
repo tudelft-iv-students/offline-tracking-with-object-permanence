@@ -20,7 +20,8 @@ train_set_args: &ds_args
   random_rots: True
   use_home: False
   use_raster: False
-  augment: True
+  augment: False
+  evaluate: True
 
 val_set_args:
   <<: *ds_args
@@ -31,7 +32,8 @@ val_set_args:
   random_flips: False
   use_home: False
   use_raster: False
-  augment: True
+  augment: False
+  evaluate: True
 
 test_set_args:
   <<: *ds_args
@@ -43,6 +45,7 @@ test_set_args:
   use_home: False
   use_raster: False
   augment: False
+  evaluate: True
 
 batch_size: 20
 num_workers: 12

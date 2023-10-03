@@ -1,6 +1,7 @@
 import argparse
 import yaml
 from train_eval.evaluator import Evaluator
+from train_eval.match_evaluator import Match_Evaluator
 import os
 
 # Parse arguments
@@ -28,5 +29,5 @@ with open(args.config, 'r') as yaml_file:
 
 
 # Evaluate
-evaluator = Evaluator(cfg, args.data_root, args.data_dir, args.checkpoint)
+evaluator = Match_Evaluator(cfg, args.data_root, args.data_dir, args.checkpoint)
 evaluator.evaluate(output_dir=args.output_dir)

@@ -34,6 +34,7 @@ class MLP_occ(PredictionDecoder):
             if self.use_gru:
                 self.traj_encoder=leaky_MLP(6,args['traj_emb_size'])
                 self.lane_aggtor = Att(n_agt=args['traj_emb_size'],n_ctx=args['node_enc_size'])
+                self.att_radius = args['att_radius']
                 if self.add_nbr:
                     self.nbr_aggtor = Att(n_agt=args['traj_emb_size'],n_ctx=args['nbr_enc_size'])
                     self.mixer=leaky_MLP(args['traj_emb_size']*3+6,args['traj_emb_size']*2)
@@ -135,7 +136,7 @@ class MLP_occ(PredictionDecoder):
                 traj_mask=refine_mask[:,:,0]
 
                 concat_base=self.traj_encoder(base_info)
-                map_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, lane_ctrs, lane_enc, self.lane_aggtor)
+                map_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, lane_ctrs, lane_enc, self.lane_aggtor,self.att_radius)
                 if self.add_nbr:
                     interact_enc=self.get_attention( traj_mask, traj_ctrs, concat_base, nbr_ctrs, nbr_enc, self.nbr_aggtor)
                     concat_enc=torch.cat((map_enc,interact_enc),-1) 
@@ -187,7 +188,7 @@ class MLP_occ(PredictionDecoder):
             predictions['refined_yaw']=refined_yaw
         return predictions
     @staticmethod
-    def get_attention(traj_mask, traj_ctrs, query, lane_ctrs, lane_enc, aggtor, dist_th=8):
+    def get_attention(traj_mask, traj_ctrs, query, lane_ctrs, lane_enc, aggtor, dist_th=8.0):
         agt_idcs=[]
         agt_ctrs=[]
         ctx_idcs=[]

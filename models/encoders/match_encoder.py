@@ -183,6 +183,12 @@ class MatchEncoder(PredictionEncoder):
             bigru_lane_feats = node_gru_enc(lane_node_masks, lane_subnode_embedding, self.lane_bi_gru)
             lane_node_encodings = PGPEncoder.variable_size_gru_encode(bigru_lane_feats, lane_node_masks, self.lane_node_aggtor)
             # Return encodings
+            if 's_next' in inputs['map_representation'].keys():
+                s_next=inputs['map_representation']['s_next']
+                edge_type=inputs['map_representation']['edge_type']
+            else:
+                s_next=None
+                edge_type=None
             encodings = {'target_agent_encodings': concat_enc,
                         'future_encodings':target_enc,
                         'hist_encodings':h0.transpose(0,1),
@@ -192,7 +198,8 @@ class MatchEncoder(PredictionEncoder):
                         'context_encoding': {'lane_enc': lane_node_encodings,
                                             'lane_mask': lane_node_masks,
                                             'lane_ctrs':inputs['map_representation']['lane_ctrs'],
-                                            # 's_next':inputs['map_representation']['s_next']
+                                            's_next':s_next,
+                                            'edge_type':edge_type,
                                             },
                         }
 

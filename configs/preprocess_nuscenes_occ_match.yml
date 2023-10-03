@@ -28,6 +28,7 @@ train_set_args:
   random_rots: True
   rdm_rot_prob: 0.8
   adjust_yaw: True
+  evaluate: False
 
 
 val_set_args:
@@ -54,6 +55,7 @@ val_set_args:
   # use_mid_origin: True
   random_rots: False
   adjust_yaw: True
+  evaluate: False
 
 test_set_args:
   split: 'val'
@@ -80,6 +82,7 @@ test_set_args:
   # use_mid_origin: True
   random_rots: False
   adjust_yaw: True
+  evaluate: False
 batch_size: 128
 num_workers: 12
 verbosity: True

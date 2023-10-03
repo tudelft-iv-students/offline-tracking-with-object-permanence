@@ -11,7 +11,7 @@ from nuscenes.eval.prediction.data_classes import Prediction
 import json
 from datasets.nuScenes.prediction import PredictHelper_occ
 from datasets.nuScenes.nuScenes_graphs_match import match_collate
-
+from models.library.baselines import *
 
 # Initialize device:
 from return_device import return_device
@@ -41,8 +41,10 @@ class Evaluator:
         if "match" in cfg:
             if cfg['match'] == True:
                 self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'],collate_fn=match_collate)
+                self.add_baseline=True
         else:
             self.dl = torch_data.DataLoader(test_set, cfg['batch_size'], shuffle=True, num_workers=cfg['num_workers'])
+            self.add_baseline=False
 
         # Initialize model
         self.model = initialize_prediction_model(cfg['encoder_type'], cfg['aggregator_type'], cfg['decoder_type'],
@@ -63,7 +65,10 @@ class Evaluator:
         self.model.decoder.teacher_force = False
         self.teacher_force = False
         self.model.decoder.pretrain_mlp = False
-        self.add_img=False
+        if 'add_img' in cfg:
+            self.add_img = cfg['add_img']
+        else:
+            self.add_img= False
         self.add_img_period=len(self.dl)//8
         self.visualize_start_epoch=cfg['visualize_start_epoch']
         if self.add_img:
@@ -89,6 +94,9 @@ class Evaluator:
                     data['inputs']['gt_traj']= None
                 # Forward pass
                 predictions = self.model(data['inputs'])
+                if self.add_baseline:
+                    baseline_score = CVM_pred(data['inputs'])
+                    predictions['baseline'] = baseline_score
                 if self.add_img and (i+1) % self.add_img_period==0:
                     file_name='Batch'+str(i)
                     u.visualize(data['inputs'],data['ground_truth'],predictions,self.vis_helper, os.path.join(output_dir,'imgs'), file_name, 'raw')

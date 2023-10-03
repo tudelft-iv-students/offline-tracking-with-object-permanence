@@ -10,6 +10,7 @@ from datasets.nuScenes.prediction import PredictHelper_occ
 import numpy as np
 from typing import Dict, Tuple, Union, List
 from scipy.spatial.distance import cdist
+from random import sample
 from numpy import random
 from numpy import linalg as LA
 import numpy.ma as ma
@@ -46,6 +47,7 @@ def get_categ(my_string):
     return class0
 
 def match_collate(batch_list):
+    batch_list=[sample for sample in batch_list if sample!=0]
     data_dict = defaultdict(list)
     for cur_sample in batch_list:
         for key, val in cur_sample.items():
@@ -105,6 +107,8 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         self.agent_radius_buffer=10
         self.map_radius_buffer=10
         self.random_rots=args['random_rots']
+        self.visualize=False
+#         self.stat_dir='preprocess_graph_match_v3'
         if self.mode == "compute_stats" and self.random_rots:
             if self.name == 'train' and self.augment:
                 self.add_objects()
@@ -113,7 +117,10 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         #     self.origin_list=[]
         #     self.radius_list=[]
         if self.mode != 'compute_stats':
-            stats = self.load_stats()
+            stats = self.load_stats(data_dir)
+            self.max_nodes = stats['num_lane_nodes']
+            self.max_nbr_nodes = stats['max_nbr_nodes']
+            self.eval = args['evaluate']
             if (self.name+"_token_list") in stats:
                 self.token_list=stats[self.name+"_token_list"]
             # print(len(self.origin_list))
@@ -137,6 +144,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
 
         # Load dataset stats (max nodes, max agents etc.)
         if self.mode == 'extract_data':
+            self.existed_data=os.listdir(self.data_dir)
             # stats = self.load_stats()
             # if self.augment:
             #     self.time_lengths = stats[self.name+"_times"]
@@ -151,7 +159,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
     
     
 
-    def add_objects(self,static_augment_ratio=0.35,dynamic_augment_ratio=0.6):
+    def add_objects(self,static_augment_ratio=0.25,dynamic_augment_ratio=0.6):
         if self.mode == 'compute_stats':
             category_list = ['vehicle']
             dynamic_sample_list=[]
@@ -201,15 +209,15 @@ class NuScenesGraphs_MATCH(NuScenesVector):
                         sample_token=metadata['sample_token']
                         
                         if idx==0:
-                            sample = self.helper.data.get('sample', sample_token)
-                            instance_scene_token=sample['scene_token']
+                            sample_frame = self.helper.data.get('sample', sample_token)
+                            instance_scene_token=sample_frame['scene_token']
                             if not (instance_scene_token in scene_tokens):
                                 break
                             prev_pose=np.array(metadata['translation'][:-1]).copy()          
                         # print(num_lidar_pts)
 
                         displacement=LA.norm(np.array(metadata['translation'][:-1])-np.array(prev_pose),ord=2)
-                        if displacement and displacement>1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
+                        if  displacement>1e-3 and (idx>int(1+self.t_h*2)+1 and idx<(instance['nbr_annotations']+1-int((5+self.t_h)*2))):
                             tokens=i_t+'_'+prev_sample
                             if not (tokens in trainval_token_list):
                                 dynamic_sample_list.append(tokens)
@@ -225,16 +233,16 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             print("Total sample: ", len(self.token_list))
             original_length=len(self.token_list)
             try:
-                self.token_list+=random.sample(static_sample_list,int(original_length*static_augment_ratio))
+                self.token_list+=sample(static_sample_list,int(original_length*static_augment_ratio))
             except:
                 self.token_list+=static_sample_list
             try:
-                self.token_list+=random.sample(dynamic_sample_list,int(original_length*dynamic_augment_ratio))
+                self.token_list+=sample(dynamic_sample_list,int(original_length*dynamic_augment_ratio))
             except:
                 self.token_list+=dynamic_sample_list
             print("Total sample after augmentation: ", len(self.token_list))
         else:
-            stats = self.load_stats()
+            stats = self.load_stats(self.stat_dir)
             
             if self.name+"_token_list" in stats:
                 self.token_list=stats[self.name+"_token_list"]
@@ -265,20 +273,39 @@ class NuScenesGraphs_MATCH(NuScenesVector):
                 if k != 'node_nums':
                     v=torch.Tensor(v)
                 sample_dict[k]=v
-            
-            history_mask_time = -(random.random()*self.t_h+0.1)
+            if self.visualize:
+                history_mask_time = -(self.t_h+0.1)
+            else:
+                history_mask_time = -(random.random()*self.t_h+0.1)
             target_history_mask=sample['target_agent_representation']['history']['traj'][:,-1]>history_mask_time
             target_history=sample['target_agent_representation']['history']['traj'][target_history_mask]
             target_history_velo=sample['target_agent_representation']['history']['velo'][target_history_mask]
+            uniform_time = False
             if self.augment:
-                velo_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*3).numpy()
-                location_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
-                yaw_noise=((torch.rand_like(torch.Tensor(target_history[:,0]))-0.5).numpy())*np.pi
+                # velo_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*3).numpy()
+                # location_noise=((torch.rand_like(torch.Tensor(target_history_velo))-0.5)*2).numpy()
+                # yaw_noise=((torch.rand_like(torch.Tensor(target_history[:,0]))-0.5).numpy())*np.pi
+                velo_noise=(torch.randn(*target_history_velo.shape)*2.5).numpy()
+                location_noise=(torch.randn(*target_history_velo.shape)*1.5).numpy()
+                yaw_noise=(torch.randn(*target_history[:,0].shape).numpy())*np.pi/6
+                if random.random() < 0.1:
+                    yaw_noise=np.round(np.clip(np.random.randn(*yaw_noise.shape)*0.8,a_min=-1,a_max=1))*np.pi
                 target_history[:-1,:2]+=location_noise[:-1,:2]
                 target_history_velo+=velo_noise
                 target_history[:-1,2]+=yaw_noise[:-1]
                 target_history[:-1,3]=np.cos(target_history[:-1,2])
                 target_history[:-1,4]=np.sin(target_history[:-1,2])
+                # except:
+                #     print(yaw_noise.shape)
+                #     print(target_history.shape)
+                if random.random() < 0.2:
+                    uniform_time = True
+                    uniform_mask_time=abs(np.random.normal(scale=1.2))+1.6
+                    if sample['surrounding_agent_representation']['last_times'] is None or len(sample['surrounding_agent_representation']['last_times'])==0:
+                        upper_bound=sample['target_agent_representation']['last_time']-0.1
+                    else:
+                        upper_bound=min(sample['target_agent_representation']['last_time']-0.1,min(np.array(sample['surrounding_agent_representation']['last_times']))-0.1)
+                    uniform_mask_time=min(upper_bound,uniform_mask_time)
                 
             target_history=np.concatenate((target_history,target_history_velo),axis=-1)
             target_history=np.concatenate((target_history,np.zeros([int(self.t_h*2)+1-target_history.shape[0],target_history.shape[1]])),axis=0)
@@ -289,16 +316,40 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             sample_dict['history_mask']=torch.Tensor(target_history_mask)
             
             last_time=sample['target_agent_representation']['last_time']-0.1
-            mask_time=random.random()*(last_time-1.5)+1.5
+            if self.eval:
+                mask_time=random.random()*(last_time-1.5)+1.5
+                # mask_time=self.get_mask_time(last_time,mode='eval')
+                # mask_time=self.get_mask_time(last_time,mode='gaussian')
+            else:
+                # mask_time=random.random()*(last_time-1.0)+1.0
+                if uniform_time:
+                    mask_time=uniform_mask_time
+                else:
+                    mask_time=self.get_mask_time(last_time,mode='uniform')
+                
+            if self.visualize:
+                mask_time=0.5*random.random()*(last_time-1.5)+1.5
+                # mask_time=0
+            # mask_time=random.random()*(last_time-1.0)+1.0
             target_future_mask=sample['target_agent_representation']['future']['traj'][:,-1]>mask_time
             future_velocity=sample['target_agent_representation']['future']['velo'][target_future_mask]
             target_future=np.concatenate((sample['target_agent_representation']['future']['traj'][target_future_mask],future_velocity),axis=-1)#[-(int(self.t_h*2)+1):]
             
             last_times=np.array(sample['surrounding_agent_representation']['last_times'])-0.1
-            mask_times=random.random(last_times.shape)*(last_times-1.5)+1.0
+            if self.eval:
+                mask_times=random.random(last_times.shape)*(last_times-1.5)+1.5
+                # mask_times=self.get_mask_time(last_times,mode='eval')
+                # mask_times=self.get_mask_time(last_times,mode='gaussian')
+            else:
+                # mask_times=random.random(last_times.shape)*(last_times-1.0)+1.0
+                if uniform_time:
+                    mask_times=uniform_mask_time*np.ones(last_times.shape)
+                else:
+                    mask_times=self.get_mask_time(last_times,mode='uniform')
             # residual=last_times-mask_times
             # res_mask=residual>2.5
             # mask_times[res_mask]+=residual[res_mask]*random.random(residual[res_mask].shape)
+            # mask_times=random.random(last_times.shape)*(last_times-1.0)+0.5
             vehicles=sample['surrounding_agent_representation']['vehicles']
             gt=np.concatenate((target_future,np.zeros([vehicles.shape[1]-target_future.shape[0],target_future.shape[-1]])))[np.newaxis,:,:]
             gt_mask=(gt==0)
@@ -309,12 +360,23 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             vehicles[agent_masks]=0
             masks=np.repeat(agent_masks[:,:,np.newaxis],vehicles.shape[-1],axis=-1)
             masks=np.concatenate((gt_mask,masks),axis=0)
+            if self.eval:
+                future_mask=torch.Tensor(masks.copy())
+                future_mask_bool=~(future_mask.bool())
+                valid_num=(future_mask_bool[:,:,0].any(-1)).sum()
+                if valid_num<=1:
+                    return 0
             all_vehicles=np.concatenate((gt,vehicles),axis=0)
             
             if self.augment:
-                velo_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*3).numpy()
-                location_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
-                yaw_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,0]))-0.5).numpy())*np.pi
+                # velo_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*3).numpy()
+                # location_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,:2]))-0.5)*2).numpy()
+                # yaw_noise=((torch.rand_like(torch.Tensor(all_vehicles[:,:,0]))-0.5).numpy())*np.pi
+                velo_noise=(torch.randn(*all_vehicles[:,:,:2].shape)*2.5).numpy()
+                location_noise=(torch.randn(*all_vehicles[:,:,:2].shape)*1.5).numpy()
+                yaw_noise=(torch.randn(*all_vehicles[:,:,0].shape).numpy())*np.pi/6
+                if random.random() < 0.1:
+                    yaw_noise=np.round(np.clip(np.random.randn(*yaw_noise.shape)*0.8,a_min=-1,a_max=1))*np.pi
 
                 all_vehicles[:,:,:2]+=location_noise
                 all_vehicles[:,:,-2:]+=velo_noise
@@ -327,6 +389,17 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             sample_dict['future_mask']=torch.Tensor(masks)
             
             return sample_dict
+    
+    def get_mask_time(self,last_times,mode='gaussian',mean=0.35,std=0.25):
+        if type(last_times) == float:
+            last_times=np.array(last_times)
+        if mode == 'gaussian':
+            mask_times=np.clip(abs(np.random.normal(mean, std, last_times.shape)),0.01,0.99)*(last_times-1.0)+1.0
+        elif mode == 'uniform':
+            mask_times=random.random(last_times.shape)*(last_times-1.0)+1.0
+        elif mode == 'eval':
+            mask_times=random.random(last_times.shape)*(last_times-1.0)+1.0
+        return mask_times
 
     def compute_stats(self, idx: int) -> Dict[str, int]:
         """
@@ -353,6 +426,9 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         Function to extract data. Bulk of the dataset functionality will be implemented by this method.
         :param idx: data index
         """
+        filename = self.token_list[idx] + '.pickle'
+        if filename in self.existed_data:
+            return
         inputs = self.get_inputs(idx)
         # ground_truth = self.get_ground_truth(idx)
         # node_seq_gt, evf_gt = self.get_visited_edges(idx, inputs['map_representation'])
@@ -551,7 +627,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
 
         # Add dummy node (0, 0, 0, 0, 0, 0) if no lane nodes are found
         if len(lane_node_feats) == 0:
-            lane_node_feats = [np.zeros((1, 8))]
+            lane_node_feats = [np.zeros((1, 6))]
             e_succ = [[]]
             e_prox = [[]]
 
@@ -565,7 +641,7 @@ class NuScenesGraphs_MATCH(NuScenesVector):
             return num_nodes, max_nbrs
 
         # Get edge lookup tables
-        # s_next, edge_type = self.get_edge_lookup(e_succ, e_prox)
+        s_next, edge_type = self.get_edge_lookup(e_succ, e_prox)
         
         node_nums = len(lane_node_feats)
 
@@ -583,8 +659,8 @@ class NuScenesGraphs_MATCH(NuScenesVector):
         map_representation = {
             'lane_node_feats': lane_node_feats,
             'lane_node_masks': lane_node_masks,
-            # 's_next': s_next,
-            # 'edge_type': edge_type,
+            's_next': s_next,
+            'edge_type': edge_type,
             'node_nums':node_nums
         }
 
@@ -784,9 +860,9 @@ class NuScenesGraphs_MATCH(NuScenesVector):
                 for outgoing_id in outgoing_lane_ids:
                     if outgoing_id in lane_ids:
                         e_succ_node.append(lane_ids.index(outgoing_id))
-            # for i in range(2,6):
-            #     if node_id + i < len(lane_ids) and lane_id == lane_ids[node_id + i]:
-            #         e_succ_node.append(node_id + i)
+            for i in range(2,4):
+                if node_id + i < len(lane_ids) and lane_id == lane_ids[node_id + i]:
+                    e_succ_node.append(node_id + i)
 
             
             e_succ.append(e_succ_node)

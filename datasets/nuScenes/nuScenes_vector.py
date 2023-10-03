@@ -62,10 +62,10 @@ class NuScenesVector(NuScenesTrajectories):
                                                             meters_right=self.map_extent[1])
 
         # Load dataset stats (max nodes, max agents etc.)
-        if self.mode == 'extract_data':
-            stats = self.load_stats()
-            if not self.use_raster:
-                self.max_nodes = stats['num_lane_nodes']
+        # if self.mode == 'extract_data':
+        #     stats = self.load_stats()
+        #     if not self.use_raster:
+        #         self.max_nodes = stats['num_lane_nodes']
             # self.max_vehicles = stats['num_vehicles']
             # self.max_pedestrians = stats['num_pedestrians']
 
@@ -396,11 +396,14 @@ class NuScenesVector(NuScenesTrajectories):
         else:
             return updated_pose_set
 
-    def load_stats(self) -> Dict[str, int]:
+    def load_stats(self,stat_dir=None) -> Dict[str, int]:
         """
         Function to load dataset statistics like max surrounding agents, max nodes, max edges etc.
         """
-        filename = os.path.join(self.data_dir, 'stats.pickle')
+        if stat_dir is not None:
+            filename = os.path.join(stat_dir, 'stats.pickle')
+        else:
+            filename = os.path.join(self.data_dir, 'stats.pickle')
         if not os.path.isfile(filename):
             raise Exception('Could not find dataset statistics. Please run the dataset in compute_stats mode')
 

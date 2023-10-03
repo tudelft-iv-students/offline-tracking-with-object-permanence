@@ -1,0 +1,167 @@
+# Dataset and dataloader parameters
+dataset: 'nuScenes'
+version: 'v1.0-trainval'
+# version: 'v1.0-mini'
+agent_setting: 'single_agent'
+input_representation: 'graphs_occ'
+
+train_set_args: &ds_args
+  split: 'train'
+  # split: 'mini_train'
+  split_name: 'train'
+  t_h: 2.5
+  t_f: 18.5
+  augment: False
+  map_extent: [ -50, 50, -20, 100 ]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  random_flips: False
+  use_home: False
+  use_raster: False
+  add_static_training_samples: True
+  augment_input: True
+
+val_set_args:
+  <<: *ds_args
+  split: 'train_val'
+  split_name: 'val'
+  # split: 'mini_val'
+  random_flips: False
+  use_home: False
+  use_raster: False
+  add_static_training_samples: False
+  augment_input: False
+
+test_set_args:
+  <<: *ds_args
+  t_h: 2.5
+  t_f: 6.0
+  split: 'val'
+  split_name: 'test'
+  random_flips: False
+  use_home: False
+  use_raster: False
+  add_static_training_samples: False
+  augment_input: False
+
+batch_size: 64
+num_workers: 12
+use_teacher_force: False
+nrow: 6
+pretrain: True
+pretrain_epcs: 5
+fade_epcs: 55
+visualize_start_epoch: 25
+
+
+# Encoder parameters
+encoder_type: 'pgp_encoder_occ'
+encoder_args:
+  map_aggregation: False
+  motion_enc_type: 'ugru'
+  target_agent_feat_size: 6
+  target_agent_emb_size: 24
+  target_agent_enc_size: 32
+  node_feat_size: 8
+  node_emb_size: 24
+  node_enc_size: 48
+  nbr_feat_size: 5
+  nbr_emb_size: 16
+  nbr_enc_size: 32
+  num_gat_layers: 2
+  fuse_map_with_tgt: False
+  encode_sub_node: True
+  concat_latest: False
+  # map_size: 36
+  # tn_head_num: 2
+  
+
+
+
+
+# Aggregator parameters
+aggregator_type: 'attn_occ'
+aggregator_args:
+  method: 'attention'
+  pre_train: False
+  time_emb_size: 12
+  target_emb_size: 32
+  query_enc_size: 48
+  attn_size: 36
+  map_size: 36
+  concat_latest: False
+
+# Decoder parameters
+decoder_type: 'mlp_occ'
+decoder_args:
+  add_attention: True
+  time_emb_size: 48
+  node_enc_size: 72
+  nbr_enc_size: 48
+  refinement: True
+  sep_motion_emb: False
+  motion_emb_size: 18
+  traj_emb_size: 32
+  traj_feat_size: 16
+  use_gru: True
+  add_nbr: False
+  att_radius: 3.5
+
+# Optimizer parameters
+optim_args:
+  lr: 0.001
+  scheduler_step: 10
+  scheduler_gamma: 0.5
+
+
+# losses: ['ade', 'yaw_loss','ade', 'yaw_loss']
+losses: ['huber', 'yaw_loss', 'huber', 'yaw_loss', 'huber', 'yaw_loss', 'ade', 'yaw_loss']
+loss_weights: [1.0, 0.5, 1, 0.5, 1.5, 0.5, 0.5, 0.25]
+loss_args:
+  - target: 'pre-refine'   
+  - target: 'pre-refine'
+  - target: 'initial'
+  - target: 'initial'
+  - target: 'refine'
+  - target: 'refine'
+  - target: 'endpoints'
+  - target: 'endpoints'
+
+
+
+
+tr_metrics: ['ade','yaw_loss' ,'miss_rate','ade','yaw_loss','ade','yaw_loss']
+tr_metric_args:
+  - target: 'initial'
+  - target: 'initial'
+  - dist_thresh: 2.0
+    target: 'initial'
+  - target: 'endpoints'
+  - target: 'endpoints'
+  - target: 'pre-refine'
+  - target: 'pre-refine'
+  - dist_thresh: 2.0
+    target: 'pre-refine'
+  # - target: 'refine'
+  # - target: 'refine'
+
+# val_metrics: [ 'ade', 'yaw_loss','ade', 'yaw_loss','ade', 'yaw_loss','miss_rate','ade', 'yaw_loss','miss_rate']
+val_metrics: [ 'ade', 'yaw_loss','ade', 'yaw_loss','ade', 'yaw_loss']
+val_metric_args:
+  - target: 'pre-refine'
+  - target: 'pre-refine'
+  - target: 'endpoints'
+  - target: 'endpoints'
+  - target: 'initial'
+  - target: 'initial'
+  - dist_thresh: 2.0
+    target: 'initial'
+  # - target: 'refine'
+  # - target: 'refine'
+  # - dist_thresh: 2.0
+  #   target: 'refine'
+  
+
+
+log_freq: 100
