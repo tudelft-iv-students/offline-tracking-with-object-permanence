@@ -164,3 +164,6 @@ nuscenes-prediction-challenge-trajectory-sets/
 slurm*
 ./*.pickle
 *.pickle
+*.ipynb
+det_results/*
+mot_results/*

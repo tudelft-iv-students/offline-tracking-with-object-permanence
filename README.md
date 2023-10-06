@@ -1,26 +1,23 @@
-[![PWC](https://img.shields.io/endpoint.svg?url=https://paperswithcode.com/badge/multimodal-trajectory-prediction-conditioned/trajectory-prediction-on-nuscenes)](https://paperswithcode.com/sota/trajectory-prediction-on-nuscenes?p=multimodal-trajectory-prediction-conditioned)
-
-# Multimodal Trajectory Prediction Conditioned on Lane-Graph Traversals
+# Offline Tracking with Object Permanence
 
 ![](https://github.com/nachiket92/PGP/blob/main/assets/intro.gif)
 
 
 
 
-This repository contains code for ["Multimodal trajectory prediction conditioned on lane-graph traversals"](https://proceedings.mlr.press/v164/deo22a.html) by Nachiket Deo, Eric M. Wolff and Oscar Beijbom, presented at CoRL 2021.  
+This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  
 
 ```bibtex
-@inproceedings{deo2021multimodal,
-  title={Multimodal Trajectory Prediction Conditioned on Lane-Graph Traversals},
-  author={Deo, Nachiket and Wolff, Eric and Beijbom, Oscar},
-  booktitle={5th Annual Conference on Robot Learning},
-  year={2021}
+@misc{liu2023offline,
+      title={Offline Tracking with Object Permanence}, 
+      author={Xianzhong Liu and Holger Caesar},
+      year={2023},
+      eprint={2310.01288},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV}
 }
 ```
 
-
-**Note:** While I'm one of the authors of the paper, this is an independent re-implementation of the original code developed during an internship at Motional. The code follows the implementation details in the paper. Hope this helps!
- -Nachiket   
 
 
 ## Installation
@@ -83,9 +80,9 @@ python preprocess.py -c configs/preprocess_nuscenes.yml -r path/to/nuScenes/root
 
 ## Inference
 
-You can download the trained model weights using [this link](https://drive.google.com/file/d/1lHwC6I6VRLT-BLs9gRGu_xMaIupMlbtS/view?usp=sharing).
+<!-- You can download the trained model weights using [this link](https://drive.google.com/file/d/1lHwC6I6VRLT-BLs9gRGu_xMaIupMlbtS/view?usp=sharing). -->
 
-To evaluate on the nuScenes val set run the following script. This will generate a text file with evaluation metrics at the specified output directory. The results should match the [benchmark entry](https://eval.ai/web/challenges/challenge-page/591/leaderboard/1659) on Eval.ai. 
+<!-- To evaluate on the nuScenes val set run the following script. This will generate a text file with evaluation metrics at the specified output directory. The results should match the [benchmark entry](https://eval.ai/web/challenges/challenge-page/591/leaderboard/1659) on Eval.ai. 
 ```shell
 python evaluate.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/data -o path/to/output/directory -w path/to/trained/weights
 ```
@@ -93,6 +90,13 @@ python evaluate.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/ro
 To visualize predictions run the following script. This will generate gifs for a set of instance tokens (track ids) from nuScenes val at the specified output directory.  
 ```shell
 python visualize.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/data -o path/to/output/directory -w path/to/trained/weights
+``` -->
+
+### Generating the initial online tracking result
+1. Download the [detection results](https://mitprod-my.sharepoint.com/:f:/g/personal/tianweiy_mit_edu/Eip_tOTYSk5JhdVtVzlXlyABDPnGx9vsnwdo5SRK7bsh8w?e=vSdija) in standard nuScenes submission format. (Note: the link is from [CenterPoint](https://github.com/tianweiy/CenterPoint). Any other detectors will also work as long as it fits the format.) The detection results can be saved in [det_result](./det_results/).
+2. Run the tracking script (TODO: add multiprocessing to make the nms faster)
+```shell
+python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --nms --version v1.0-test
 ```
 
 
