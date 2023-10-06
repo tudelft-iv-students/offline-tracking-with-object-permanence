@@ -1,8 +1,15 @@
 # Offline Tracking with Object Permanence
 
-![](https://github.com/nachiket92/PGP/blob/main/assets/intro.gif)
+## Visualiztion
 
+![](https://github.com/tudelft-iv-students/xianzhongliu/blob/delete_unecessary/assets/vis1.gif)
+![](https://github.com/tudelft-iv-students/xianzhongliu/blob/delete_unecessary/assets/vis4.gif)
 
+Rectangels: GT boxes.
+
+Blue arrow: recovered box centers which are originally missing in the initial tracking result. 
+
+Red arrows: box centers in initial online tracking.
 
 
 This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  
