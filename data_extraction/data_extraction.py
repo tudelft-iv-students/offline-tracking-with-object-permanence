@@ -250,7 +250,7 @@ def get_available_scenes(nusc):
     print('exist scene num:', len(available_scenes))
     return available_scenes
 
-def extract_data( version, data_path, save_path, result_path ,cfg,max_sweeps=15,verbose=False):
+def extract_data( version, data_path, save_path, result_path ,cfg,max_sweeps=15,verbose=False,extract_point_clouds=False):
     
     save_path = save_path / version
 
@@ -295,12 +295,12 @@ def extract_data( version, data_path, save_path, result_path ,cfg,max_sweeps=15,
         with open(save_path / f'nuscenes_infos_occ_{max_sweeps}sweeps_test_temp.pkl', 'rb') as f:
             test_nusc_infos = pickle.load(f)
             f.close()
-    raise NotImplementedError()        
-    test_nusc_infos = extract_pcl(save_path,test_nusc_infos,max_sweeps)
+    if extract_point_clouds:        
+        test_nusc_infos = extract_pcl(save_path,test_nusc_infos,max_sweeps)
 
-    with open(save_path / f'nuscenes_infos_occ_{max_sweeps}sweeps_test.pkl', 'wb') as f:
-        pickle.dump(test_nusc_infos, f)
-        f.close()
+        with open(save_path / f'nuscenes_infos_occ_{max_sweeps}sweeps_test.pkl', 'wb') as f:
+            pickle.dump(test_nusc_infos, f)
+            f.close()
 
 def toOpen3d(points):
     import open3d as o3d

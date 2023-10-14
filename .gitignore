@@ -151,11 +151,8 @@ output/test_home/
 
 output/test*
 preprocess_home_mini/*
-preprocess_home/*
-preprocess_home_mini/
-preprocess_home/
-preprocess_graph_mini_test/
-preprocess_graph/
+preprocess_home*/
+
 preprocess_graph*/
 output/
 nuscenes-prediction-challenge-trajectory-sets/
@@ -167,3 +164,4 @@ slurm*
 *.ipynb
 det_results/*
 mot_results/*
+extracted_mot_data/*

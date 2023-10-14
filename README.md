@@ -1,16 +1,6 @@
 # Offline Tracking with Object Permanence
 
-## Visualiztion
-
-![](https://github.com/tudelft-iv-students/xianzhongliu/blob/delete_unecessary/assets/vis1.gif)
-![](https://github.com/tudelft-iv-students/xianzhongliu/blob/delete_unecessary/assets/vis4.gif)
-
-Rectangels: GT boxes.
-
-Blue arrow: recovered box centers which are originally missing in the initial tracking result. 
-
-Red arrows: box centers in initial online tracking.
-
+## Introduction
 
 This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  
 
@@ -24,6 +14,21 @@ This repository contains code for ["Offline Tracking with Object Permanence "](h
       primaryClass={cs.CV}
 }
 ```
+
+
+## Visualiztion
+
+<img src="assets/vis1.gif" width="225" height="225"/>
+<img src="assets/vis4.gif" width="225" height="225"/>
+
+Rectangels: GT boxes.
+
+Blue arrow: recovered box centers which are originally missing in the initial tracking result. 
+
+Red arrows: visible box centers in initial online tracking.
+
+
+
 
 
 
@@ -105,7 +110,15 @@ python visualize.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/r
 ```shell
 python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --nms --version v1.0-test
 ```
-
+### Extract vehicle tracklets and convert to input format for Re-ID
+3. Extract vehicle tracklets
+```
+python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json
+``` 
+4. Convert to Re-ID input
+```
+python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml
+```
 
 ## Training
 
