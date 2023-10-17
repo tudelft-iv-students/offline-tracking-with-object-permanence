@@ -31,4 +31,3 @@ REF_PCL_PATH: 'nuscenes_occ_database_15sweeps_withvelo'
 
 BALANCED_RESAMPLING: False
 
-

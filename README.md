@@ -90,19 +90,8 @@ python preprocess.py -c configs/preprocess_nuscenes.yml -r path/to/nuScenes/root
 ```
 
 
-## Inference
+## Inference with online tracking result
 
-<!-- You can download the trained model weights using [this link](https://drive.google.com/file/d/1lHwC6I6VRLT-BLs9gRGu_xMaIupMlbtS/view?usp=sharing). -->
-
-<!-- To evaluate on the nuScenes val set run the following script. This will generate a text file with evaluation metrics at the specified output directory. The results should match the [benchmark entry](https://eval.ai/web/challenges/challenge-page/591/leaderboard/1659) on Eval.ai. 
-```shell
-python evaluate.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/data -o path/to/output/directory -w path/to/trained/weights
-```
-
-To visualize predictions run the following script. This will generate gifs for a set of instance tokens (track ids) from nuScenes val at the specified output directory.  
-```shell
-python visualize.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/data -o path/to/output/directory -w path/to/trained/weights
-``` -->
 
 ### Generating the initial online tracking result
 1. Download the [detection results](https://mitprod-my.sharepoint.com/:f:/g/personal/tianweiy_mit_edu/Eip_tOTYSk5JhdVtVzlXlyABDPnGx9vsnwdo5SRK7bsh8w?e=vSdija) in standard nuScenes submission format. (Note: the link is from [CenterPoint](https://github.com/tianweiy/CenterPoint). Any other detectors will also work as long as it fits the format.) The detection results can be saved in [det_result](./det_results/).
@@ -115,9 +104,14 @@ python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_result
 ```
 python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json
 ``` 
-4. Convert to Re-ID input
+4. Convert to Re-ID input(TODO: add multiprocessing to make the nms faster)
 ```
 python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml
+```
+### Performing Re-ID
+5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets
+```
+python motion_matching.py --cfg_file motion_associator/re-association.yaml --version v1.0-test --result_path mot_results/v1.0-test/tracking_result.json
 ```
 
 ## Training

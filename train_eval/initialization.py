@@ -45,8 +45,6 @@ from metrics.min_ade_loss import MinADE_loss
 from metrics.min_fde import MinFDEK
 from metrics.miss_rate import MissRateK
 from metrics.covernet_loss import CoverNetLoss
-from metrics.pi_bc import PiBehaviorCloning
-from metrics.goal_pred_nll import GoalPredictionNLL
 from metrics.focal_loss import FocalLoss
 from metrics.l1_loss import L1_loss
 from metrics.huber import Huber
@@ -180,8 +178,6 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
         'min_fde_k': MinFDEK,
         'min_l1_k':MinL1K,
         'miss_rate_k': MissRateK,
-        'pi_bc': PiBehaviorCloning,
-        'goal_pred_nll': GoalPredictionNLL,
         'focal_loss':FocalLoss,
         'drivable_loss':DrivablelLoss,
         'l1_loss': L1_loss,

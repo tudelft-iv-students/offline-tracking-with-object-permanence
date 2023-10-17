@@ -158,16 +158,16 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
                 self.skip = False
                 self.class_tracks=scene_info['class_tracks']
                 self.mask_row_indices=scene_info['mask_row_indices']
-                if 'decay_matrix' in scene_info.keys():
-                    self.decay_matrix=scene_info['decay_matrix']
+                # if 'decay_matrix' in scene_info.keys():
+                #     self.decay_matrix=scene_info['decay_matrix']
             else:
                 self.skip = True
                 self.right_time=None
-            if self.mode == 'add_time_decay' and not self.skip:
+            if self.mode == 'add_time_diff' and not self.skip:
                 left_times,right_times,num_obs,look_up_lists,tracker_ids,class_tracks=self.get_times(nuscenes_infos)
-                self.decay_matrix=self.get_time_decay_matrix(torch.Tensor(left_times[self.class_name]),torch.Tensor(right_times[self.class_name]))
-                scene_info['decay_matrix']=self.decay_matrix
-                self.save_data(scene_info,save_scene_info=True)
+                self.diff_matrix=self.get_diff_mat(torch.Tensor(right_times[self.class_name]),torch.Tensor(left_times[self.class_name]))
+                # scene_info['decay_matrix']=self.decay_matrix
+                self.save_data(self.diff_matrix,save_time_diff=True)
         else:
             left_times,right_times,num_obs,look_up_lists,tracker_ids,class_tracks=self.get_times(nuscenes_infos)
             self.left_time=left_times[self.class_name]
@@ -184,8 +184,8 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             # self.mask*=frame_num_mask
             self.mask_row_indices=list(compress(list(range(len(self.left_time))),list(self.mask.any(-1))))
             self.class_tracks=class_tracks
-            self.decay_matrix=self.get_time_decay_matrix(torch.Tensor(self.left_time),torch.Tensor(self.right_time))
-
+            # self.decay_matrix=self.get_time_decay_matrix(torch.Tensor(self.left_time),torch.Tensor(self.right_time))
+            self.diff_matrix=self.get_diff_mat(torch.Tensor(self.right_time),torch.Tensor(self.left_time))
             scene_info={
                 'right_time':self.right_time,
                 'look_up_list':self.look_up_list,
@@ -193,8 +193,10 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
                 'mask':self.mask,
                 'class_tracks':self.class_tracks,
                 'mask_row_indices':self.mask_row_indices,
-                'decay_matrix':self.decay_matrix
+                # 'decay_matrix':self.decay_matrix
             }
+            if self.mask.any(-1).sum() != 0 and self.mask is not None:
+                self.save_data(self.diff_matrix,save_time_diff=True)
             self.save_data(scene_info,save_scene_info=True)
         self.length=self.mask.any(-1).sum()
         self.map_radius_buffer=10
@@ -425,7 +427,7 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             data_dict=self.load_data(row_ind)
             return data_dict
         
-    def save_data(self,data_dict, row_ind= None, save_scene_info=False):
+    def save_data(self,data_dict, row_ind= None, save_scene_info=False,save_time_diff=False):
         database_save_path = self.save_path / self.scene_token
         # db_info_save_path = save_path / f'nuscenes_occ_dbinfos_{max_sweeps}sweeps_withvelo.pkl'
 
@@ -435,6 +437,8 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             filepath=database_save_path / (str(row_ind)+'.pickle')
         elif save_scene_info:
             filepath=database_save_path / 'scene_info.pickle'
+        elif save_time_diff:
+            filepath=database_save_path / 'time_diff.pickle'
         else:
             filepath=database_save_path / 'stats.pickle'
 
@@ -443,12 +447,14 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             
         return 
     
-    def load_data(self, row_ind= None, load_scene_info=False):
+    def load_data(self, row_ind= None, load_scene_info=False,save_time_diff=False):
         database_save_path = self.save_path / self.scene_token
         if row_ind is not None:
             filepath=database_save_path / (str(row_ind)+'.pickle')
         elif load_scene_info:
             filepath=database_save_path / 'scene_info.pickle'
+        elif save_time_diff:
+            filepath=database_save_path / 'time_diff.pickle'
         else:
             filepath=database_save_path / 'stats.pickle'
         
@@ -798,6 +804,21 @@ if __name__ == '__main__':
                 'truck',
                 'trailer'
                 ]
+    # for class_name in class_names:
+    #     datasets=[]
+    #     for scene_idx in range(len(val_scenes)):
+    #         datasets.append(NuScenesDataset_MATCH_EXT(scene_idx,
+    #             dataset_cfg=dataset_cfg, class_name=class_name,
+    #             root_path=ROOT_DIR / 'data' / 'nuscenes',
+    #             logger=create_logger(),helper=helper,mode='add_time_diff'
+    #         ))
+    # raise NotImplementedError()
+    class_names=[
+                'car',
+                'bus',
+                'truck',
+                'trailer'
+                ]
     for class_name in class_names:
         if not args.skip_compute_stats:
             datasets=[]
@@ -840,7 +861,7 @@ if __name__ == '__main__':
                 logger=create_logger(),helper=helper,mode='extract_data'
             ))
             # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
-        val_dls=[torch_data.DataLoader(dataset, dataset_cfg.OPTIMIZATION.BATCH_SIZE_PER_GPU, shuffle=False,
+        val_dls=[torch_data.DataLoader(dataset, dataset_cfg.BATCH_SIZE, shuffle=False,
                             num_workers=dataset_cfg.num_workers, pin_memory=True) for dataset in datasets]
         for scene_idx in tqdm(range(len(val_scenes))):
             scene_stats={}
@@ -854,7 +875,7 @@ if __name__ == '__main__':
     #         root_path=ROOT_DIR / 'data' / 'nuscenes',
     #         logger=create_logger(),helper=helper,mode='debug_radius'
     #     ))
-    # val_dls=[torch_data.DataLoader(dataset, dataset_cfg.OPTIMIZATION.BATCH_SIZE_PER_GPU, shuffle=False,
+    # val_dls=[torch_data.DataLoader(dataset, dataset_cfg.BATCH_SIZE, shuffle=False,
     #                     num_workers=dataset_cfg.num_workers, pin_memory=True,collate_fn=dummy_collate) for dataset in datasets]
     # radius_list=[]
     # for scene_idx in tqdm(range(len(val_scenes))):

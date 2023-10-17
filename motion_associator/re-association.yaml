@@ -1,0 +1,81 @@
+DATA_DIR: 'extracted_mot_data/final_version_nms'
+VERSION: 'v1.0-test'
+ASSOCIATION_THRESHOLD: 0.95
+ASSOCIATION_METHOD: greedy
+DECAY_FACTOR: 0.6
+MOTION_INFO_PATH: {
+    'train': [nuscenes_infos_occ_15sweeps_test_temp.pkl],
+    'test': [nuscenes_infos_occ_15sweeps_test_temp.pkl],
+}
+
+batch_size: 32
+motion_ckpt_path: 'motion_associator/adj_time_motion_associator.tar'
+map_ckpt_path: 'motion_associator/short_time_map_associator.tar'
+
+motion_model_cfg:
+  # Encoder parameters
+  encoder_type: 'match_encoder'
+  encoder_args:
+    fuse_map: False
+    target_feat_size: 8
+    target_emb_size: 16
+    past_enc_size: 24
+    node_feat_size: 8
+    node_emb_size: 16
+    node_enc_size: 48
+    future_enc_size: 64
+    lane_enc_size: 64
+    
+
+
+
+
+  # Aggregator parameters
+  aggregator_type: 'match_agg'
+  aggregator_args:
+    agg_method: 'none'
+    node_enc_size: 64
+    att_hidden_size: 32
+
+  # Decoder parameters
+  decoder_type: 'match_decoder'
+  decoder_args:
+    fuse_map: False
+    hist_enc_size: 24
+    future_enc_size: 64
+    node_enc_size: 64
+    input_size: 88
+
+map_model_cfg:
+  # Encoder parameters
+  encoder_type: 'match_encoder'
+  encoder_args:
+    fuse_map: True
+    target_feat_size: 8
+    target_emb_size: 16
+    past_enc_size: 24
+    node_feat_size: 8
+    node_emb_size: 16
+    node_enc_size: 48
+    future_enc_size: 64
+    lane_enc_size: 64
+    
+
+
+  # Aggregator parameters
+  aggregator_type: 'match_agg'
+  aggregator_args:
+    agg_method: 'fully_connected'
+    node_enc_size: 64
+    att_hidden_size: 32
+    num_gat_layers: 2
+
+  # Decoder parameters
+  decoder_type: 'match_decoder'
+  decoder_args:
+    fuse_map: True
+    hist_enc_size: 24
+    future_enc_size: 64
+    node_enc_size: 64
+    input_size: 88
+
