@@ -9,7 +9,7 @@ import math
 device = return_device()
 
 
-class PGPEncoder_occ(PredictionEncoder):
+class Encoder_occ(PredictionEncoder):
 
     def __init__(self, args: Dict):
         """

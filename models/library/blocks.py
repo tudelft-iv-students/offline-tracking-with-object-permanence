@@ -430,6 +430,13 @@ class Att(nn.Module):
             wi.append(idcs[:, 1] + wi_count)
             hi_count += len(agt_idcs[i])
             wi_count += len(ctx_idcs[i])
+        if len(hi) ==0:
+            agts = self.agt(agts)
+            agts = self.relu(agts)
+            agts = self.linear(agts)
+            agts += res
+            agts = self.relu(agts)
+            return agts
         hi = torch.cat(hi, 0)
         wi = torch.cat(wi, 0)
 

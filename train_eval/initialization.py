@@ -16,7 +16,7 @@ from models.encoders.home_encoder import HomeEncoder
 from models.encoders.raster_encoder import RasterEncoder
 from models.encoders.polyline_subgraph import PolylineSubgraphs
 from models.encoders.pgp_encoder import PGPEncoder
-from models.encoders.pgp_encoder_v2 import PGPEncoder_occ
+from models.encoders.track_completion_encoder import Encoder_occ
 from models.encoders.match_encoder import MatchEncoder
 from models.aggregators.concat import Concat
 from models.aggregators.global_attention import GlobalAttention
@@ -112,7 +112,7 @@ def initialize_encoder(encoder_type: str, encoder_args: Dict):
         'raster_encoder': RasterEncoder,
         'polyline_subgraphs': PolylineSubgraphs,
         'pgp_encoder': PGPEncoder,
-        'pgp_encoder_occ': PGPEncoder_occ,
+        'pgp_encoder_occ': Encoder_occ,
         'home_encoder':HomeEncoder,
         'match_encoder':MatchEncoder
     }

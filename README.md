@@ -104,21 +104,29 @@ python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_result
 ```
 python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json
 ``` 
-4. Convert to Re-ID input(TODO: add multiprocessing to make the nms faster)
+4. Convert to Re-ID input(TODO: add multiprocessing to make the extraction faster)
 ```
-python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml
+##Slower
+#python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml
+##OR a more faster way
+bash Re-ID_extraction.sh
 ```
 ### Performing Re-ID
 5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets
 ```
-python motion_matching.py --cfg_file motion_associator/re-association.yaml --version v1.0-test --result_path mot_results/v1.0-test/tracking_result.json
+python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json
 ```
 
 ## Training
 
-To train the model from scratch, run
+To train the Re-ID model from scratch, run
 ```shell
-python train.py -c configs/pgp_gatx2_lvm_traversal.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/data -o path/to/output/directory -n 100
+python train.py -c configs/match_train_augment.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o path/to/output/directory/Re-ID -n 50
+```
+
+To train the track completion model from scratch, run
+```shell
+python train.py -c configs/track_completion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Track_completion/data -o path/to/output/directory/Track_completion -n 50
 ```
 
 The training script will save training checkpoints and tensorboard logs in the output directory.

@@ -1,16 +1,16 @@
 DATA_DIR: 'extracted_mot_data/final_version_nms'
 VERSION: 'v1.0-test'
-ASSOCIATION_THRESHOLD: 0.95
+ASSOCIATION_THRESHOLD: 0.9
 ASSOCIATION_METHOD: greedy
-DECAY_FACTOR: 0.6
+DECAY_FACTOR: 0.975
 MOTION_INFO_PATH: {
     'train': [nuscenes_infos_occ_15sweeps_test_temp.pkl],
     'test': [nuscenes_infos_occ_15sweeps_test_temp.pkl],
 }
 
 batch_size: 32
-motion_ckpt_path: 'motion_associator/adj_time_motion_associator.tar'
-map_ckpt_path: 'motion_associator/short_time_map_associator.tar'
+motion_ckpt_path: 'motion_associator/motion_associator.tar'
+map_ckpt_path: 'motion_associator/glb_graph_associator.tar'
 
 motion_model_cfg:
   # Encoder parameters

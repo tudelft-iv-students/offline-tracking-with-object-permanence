@@ -176,12 +176,12 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             self.look_up_list=look_up_lists[self.class_name]
             self.tracker_ids=tracker_ids[self.class_name]
             
-            # frame_num_filter=torch.Tensor(num_obs)>1
+            frame_num_filter=torch.Tensor(num_obs)>1
             # frame_num_mask=(frame_num_filter.unsqueeze(0)*frame_num_filter.unsqueeze(-1))
             
-            # frame_num_mask=frame_num_filter.unsqueeze(-1).repeat(1,len(self.left_time))
+            frame_num_mask=frame_num_filter.unsqueeze(-1).repeat(1,len(self.left_time))
             self.mask=self.get_similarity_mask(torch.Tensor(self.left_time),torch.Tensor(self.right_time))
-            # self.mask*=frame_num_mask
+            self.mask*=frame_num_mask
             self.mask_row_indices=list(compress(list(range(len(self.left_time))),list(self.mask.any(-1))))
             self.class_tracks=class_tracks
             # self.decay_matrix=self.get_time_decay_matrix(torch.Tensor(self.left_time),torch.Tensor(self.right_time))
@@ -396,6 +396,8 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             track_bool=self.mask[row_ind]
             matrix_row_inds=(torch.arange(len(track_bool))[track_bool]).unsqueeze(-1)
             data_dict=self.load_data(row_ind)
+            if 'lane_ctrs' in data_dict.keys():
+                return 0
             lane_feature = data_dict['lane_node_feats']
             target_motion=data_dict['target_motion']
             candidate_motion=data_dict['candidate_motion']
@@ -776,6 +778,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config of dataset')
     parser.add_argument('--skip_compute_stats',  action='store_true')
+    parser.add_argument('--type', default=None)
     # parser.add_argument('--result_path', type=str, default='../mot_results/tracking_result_cp_mini.json', help='')
     args = parser.parse_args()
     
@@ -798,12 +801,7 @@ if __name__ == '__main__':
     # available_scene_names = [s['name'] for s in available_scenes]
     # val_scenes = list(filter(lambda x: x in available_scene_names, val_scenes))
     # val_scenes = set([available_scenes[available_scene_names.index(s)]['token'] for s in val_scenes])
-    class_names=[
-                'car',
-                'bus',
-                'truck',
-                'trailer'
-                ]
+
     # for class_name in class_names:
     #     datasets=[]
     #     for scene_idx in range(len(val_scenes)):
@@ -813,12 +811,15 @@ if __name__ == '__main__':
     #             logger=create_logger(),helper=helper,mode='add_time_diff'
     #         ))
     # raise NotImplementedError()
-    class_names=[
-                'car',
-                'bus',
-                'truck',
-                'trailer'
-                ]
+    if args.type is None:
+        class_names=[
+                    'car',
+                    'bus',
+                    'truck',
+                    'trailer'
+                    ]
+    else:
+        class_names=[args.type]
     for class_name in class_names:
         if not args.skip_compute_stats:
             datasets=[]
@@ -846,12 +847,15 @@ if __name__ == '__main__':
                         else:
                             scene_stats[k] = torch.max(v).item()
                 val_dls[scene_idx].dataset.save_data(scene_stats)
-    class_names=[
-                'car',
-                'bus',
-                'truck',
-                'trailer'
-                ]
+    if args.type is None:
+        class_names=[
+                    'car',
+                    'bus',
+                    'truck',
+                    'trailer'
+                    ]
+    else:
+        class_names=[args.type]
     for class_name in class_names:
         datasets=[]
         for scene_idx in range(len(val_scenes)):
