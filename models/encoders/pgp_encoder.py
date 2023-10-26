@@ -192,7 +192,7 @@ class PGPEncoder(PredictionEncoder):
             batch_size = feat_embedding.shape[0]
             max_num = feat_embedding.shape[1]
             hidden_state_size = gru.hidden_size
-            encoding = torch.zeros((batch_size, max_num, hidden_state_size), device=device)
+            encoding = torch.zeros((batch_size, max_num, hidden_state_size), device=feat_embedding.device)
 
         return encoding
 

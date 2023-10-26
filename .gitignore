@@ -162,6 +162,9 @@ slurm*
 ./*.pickle
 *.pickle
 *.ipynb
-det_results/*
-mot_results/*
+# det_results/*
+# mot_results/*
+*.json
+*.pkl
 extracted_mot_data/*
+mot_results/Re-ID_results/matching_info/v1.0-test/plots/

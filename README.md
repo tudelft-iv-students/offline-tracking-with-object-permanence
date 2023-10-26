@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  
+This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  This project aims to recover the occluded vehicle trajectories and reduce the identity switches caused by occlusions.
 
 ```bibtex
 @misc{liu2023offline,
@@ -18,14 +18,14 @@ This repository contains code for ["Offline Tracking with Object Permanence "](h
 
 ## Visualiztion
 
-<img src="assets/vis1.gif" width="225" height="225"/>
-<img src="assets/vis4.gif" width="225" height="225"/>
+<img src="assets/vis1.gif" width="450" height="450"/>
+<img src="assets/vis4.gif" width="450" height="450"/>
 
-Rectangels: GT boxes.
+* Rectangels: GT boxes.
 
-Blue arrow: recovered box centers which are originally missing in the initial tracking result. 
+* <span style="color:blue">Blue arrows</span>: recovered box centers which are originally missing in the initial tracking result. 
 
-Red arrows: visible box centers in initial online tracking.
+* <span style="color:red">Red arrows</span>: visible box centers in initial online tracking.
 
 
 
@@ -38,12 +38,12 @@ Red arrows: visible box centers in initial online tracking.
 
 2. Set up a new conda environment 
 ``` shell
-conda create --name pgp python=3.7
+conda create --name offline_trk python=3.7
 ```
 
 3. Install dependencies
 ```shell
-conda activate pgp
+conda activate offline_trk
 
 # nuScenes devkit
 pip install nuscenes-devkit
@@ -52,7 +52,6 @@ pip install nuscenes-devkit
 conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=10.1 -c pytorch
 
 # Additional utilities
-pip install ray
 pip install psutil
 pip install positional-encodings
 pip install imageio
@@ -116,6 +115,22 @@ bash Re-ID_extraction.sh
 ```
 python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json
 ```
+
+6. To visualize all the association result, run
+```
+python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --visualize
+```
+The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-test/plots`. Note that some times the detections are flipped for 180 degrees. 
+<p align="center">
+    <img src="assets/association_vis.png" width="450" height="450"/>
+</p>
+
+* <span style="color:green">Green arrows</span>: History tracklet. 
+
+* <span style="color:blue">Blue arrows</span>: Future tracklets with low association scores. 
+
+
+* <span style="color:red">Red arrows</span>: Future tracklets with high association scores. 
 
 ## Training
 
