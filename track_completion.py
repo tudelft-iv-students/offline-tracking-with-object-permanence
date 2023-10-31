@@ -11,7 +11,6 @@ import copy
 from nuscenes.nuscenes import NuScenes
 from nuscenes.utils import splits
 # from pcdet.datasets.nuscenes import nuscenes_utils 
-from itertools import compress
 import numpy.ma as ma
 from data_extraction.data_extraction import *
 import torch.utils.data as torch_data
@@ -23,7 +22,7 @@ from nuscenes.eval.common.config import config_factory
 from nuscenes.eval.tracking.loaders import interpolate_tracking_boxes
 from track_completion_ext import *
 from models.model import PredictionModel
-from models.encoders.track_completion_encoder_v2 import Encoder_occ
+from models.encoders.track_completion_encoder import Encoder_occ
 from models.aggregators.attention_occ import Attention_occ
 from models.decoders.mlp_occ import MLP_occ
 import train_eval.utils as u
@@ -35,7 +34,7 @@ def build_and_load_model(ckpt_path,model_cfg):
     print()
     print("Loading checkpoint from " + ckpt_path + " ...", end=" ")
     model = PredictionModel(
-        PGPEncoder_occ(model_cfg['encoder_args']),
+        Encoder_occ(model_cfg['encoder_args']),
         Attention_occ(model_cfg['aggregator_args']),
         MLP_occ(model_cfg['decoder_args'])
     ).float().to(device)
@@ -141,7 +140,7 @@ class Track_filler():
 
     
     
-    def interpolate_tracks(self,tracks_by_timestamp: DefaultDict[int, List[TrackingBox]],scene_filling_info) -> DefaultDict[int, List[TrackingBox]]:
+    def interpolate_tracks(self,tracks_by_timestamp: DefaultDict[int, List[TrackingBox]],scene_token,scene_filling_info=None) -> DefaultDict[int, List[TrackingBox]]:
         """
         Interpolate the tracks to fill in holes, especially since GT boxes with 0 lidar points are removed.
         This interpolation does not take into account visibility. It interpolates despite occlusion.
@@ -177,19 +176,28 @@ class Track_filler():
                     right_tracking_box = tracks_by_id[tracking_id][right_ind]
                     left_tracking_box = tracks_by_id[tracking_id][left_ind]
                     right_ratio = float(right_timestamp - timestamp) / (right_timestamp - left_timestamp)
-                    # gap_dist=LA.norm(np.array(right_tracking_box.translation[:-1])-np.array(left_tracking_box.translation[:-1]),ord=2)
+                    gap_dist=LA.norm(np.array(right_tracking_box.translation[:-1])-np.array(left_tracking_box.translation[:-1]),ord=2)
                     # tracking_box = interpolate_tracking_boxes(left_tracking_box, right_tracking_box, right_ratio)
                     # Interpolate.
                     tracking_box = interpolate_tracking_boxes(left_tracking_box, right_tracking_box, right_ratio)
-                    if tracking_id in scene_filling_info.keys():
-                        if timestamp in scene_filling_info[tracking_id].keys():
-                            frame_info=scene_filling_info[tracking_id][timestamp]
-                            coord=frame_info['coord']
-                            rotation=frame_info['rotation']
-                            tracking_box.translation=coord.__add__((tracking_box.translation[-1],))
-                            tracking_box.rotation=rotation
-                            interpolate_count += 1
-                    tracks_by_timestamp[timestamp].append(tracking_box)
+                    tracking_box.rotation=tuple(tracking_box.rotation)
+                    if scene_filling_info is not None:
+                        if tracking_id in scene_filling_info.keys():
+                            if str(timestamp) in scene_filling_info[tracking_id].keys() or timestamp in scene_filling_info[tracking_id].keys():
+                                assert(gap_dist>=self.dataset_cfg.interpolate_dist_thresh and ((right_timestamp - left_timestamp)/1e6) >= self.dataset_cfg.interpolate_time_thresh)
+                                try: 
+                                    frame_info=scene_filling_info[tracking_id][timestamp]
+                                except:
+                                    frame_info=scene_filling_info[tracking_id][str(timestamp)]
+                                coord=frame_info['coord']
+                                rotation=frame_info['rotation']
+                                try:
+                                    tracking_box.translation=coord.__add__((tracking_box.translation[-1],))
+                                except:
+                                    tracking_box.translation=coord.append(tracking_box.translation[-1])
+                                tracking_box.rotation=rotation
+                                interpolate_count += 1
+                        tracks_by_timestamp[timestamp].append(tracking_box)
         print('Scene: ', scene_token)
         print('     Number of long interpolations in scene: ', interpolate_count)
         return tracks_by_timestamp
@@ -265,25 +273,54 @@ class Track_filler():
                 for box in boxes:
                     track_id_scores[box.tracking_id].append(box.tracking_score)
 
-            # Compute average scores for each track.
-            track_id_avg_scores = {}
-            for tracking_id, scores in track_id_scores.items():
-                track_id_avg_scores[tracking_id] = np.mean(scores)
+            # # Compute average scores for each track.
+            # track_id_avg_scores = {}
+            # for tracking_id, scores in track_id_scores.items():
+            #     track_id_avg_scores[tracking_id] = np.mean(scores)
 
-            # Apply average score to each box.
-            for timestamp, boxes in scene_tracks.items():
-                for box in boxes:
-                    box.tracking_score = track_id_avg_scores[box.tracking_id]
+            # # Apply average score to each box.
+            # for timestamp, boxes in scene_tracks.items():
+            #     for box in boxes:
+            #         box.tracking_score = track_id_avg_scores[box.tracking_id]
 
 
         # Interpolate GT and predicted tracks.
         for scene_token in tracks.keys():
-            scene_filling_info = self.filling_info[scene_token]
-            tracks[scene_token] = self.interpolate_tracks(tracks[scene_token],scene_filling_info)
+            if scene_token in self.filling_info.keys():
+                scene_filling_info = self.filling_info[scene_token]
+                tracks[scene_token] = self.interpolate_tracks(tracks[scene_token],scene_token,scene_filling_info)
+            else:
+                tracks[scene_token] = self.interpolate_tracks(tracks[scene_token],scene_token)
             tracks[scene_token] = defaultdict(list, sorted(tracks[scene_token].items(), key=lambda kv: kv[0]))
 
         # self.save_data(tracks)
         return tracks
+def map_timestamps_to_sample(tracks,nusc):
+    results={}
+    for scene_token,timestamp_boxes in tracks.items():
+        for timestamp,boxes in timestamp_boxes.items():
+            assert(len(boxes)>0)
+            sample_token=boxes[0].sample_token
+            serialized_boxes=[box.serialize() for box in boxes]
+            results[sample_token]=serialized_boxes
+            
+    scene_tokens=tracks.keys()
+    for scene_token in scene_tokens:
+        # Init all timestamps in this scene.
+        scene = nusc.get('scene', scene_token)
+        cur_sample_token = scene['first_sample_token']
+        while True:
+            # Initialize array for current timestamp.
+            cur_sample = nusc.get('sample', cur_sample_token)
+            assert(cur_sample_token in results.keys())
+
+            # Abort after the last sample.
+            if cur_sample_token == scene['last_sample_token']:
+                break
+
+            # Move to next sample.
+            cur_sample_token = cur_sample['next']
+    return results
 
 if __name__ == '__main__':
     import yaml
@@ -293,12 +330,12 @@ if __name__ == '__main__':
     
 
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default="configs/nu_configs/nuscenes_dataset_occ.yaml", help='specify the config of dataset')
+    parser.add_argument('--cfg_file', type=str, default="track_completion_model/track_completion.yaml", help='specify the config of dataset')
     parser.add_argument('--result_path', type=str, help='tracking result json file')
-    parser.add_argument('--data_dir', type=str, default= 'extrated_data_prediction',help='output dir')
+    parser.add_argument('--data_dir', type=str, default= 'extrated_track_completion_data',help='data dir')
     parser.add_argument('--batch_size', type=int, default= 32)
     parser.add_argument('--verbose', type=bool, default= True)
-    parser.add_argument('--output_dir', type=str, default= None)
+    parser.add_argument('--output_dir', type=str, default= 'mot_results/track_completion_results')
     parser.add_argument('--ckpt_path', type=str, help='Trained model ckpt', required=True)
 
     # parser.add_argument('--skip_compute_stats', action= 'store_false')
@@ -308,59 +345,66 @@ if __name__ == '__main__':
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
     data_root = "/home/stanliu/data/mnt/nuScenes/"
     nusc = NuScenes(version=dataset_cfg.VERSION, dataroot=data_root, verbose=True)
-    if Path(os.path.join(args.data_dir,dataset_cfg.VERSION,args.output_dir, 'filling_info.json')).exists():
-        with open(os.path.join(args.data_dir,dataset_cfg.VERSION,args.output_dir, 'filling_info.json'), 'r') as handle:
-            filled_dict=json.load(handle)
+    # if Path(os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json')).exists():
+    #     print("Found filling info, use the existing one!")
+    #     with open(os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json'), 'r') as handle:
+    #         filled_dict=json.load(handle)
         
-    else:
+    # else:
         
+    #     print("Did not find filling info, creating one!")
+    model = build_and_load_model(args.ckpt_path,dataset_cfg.model_cfg)
+    model.eval()
+    test_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='load_data',output_dir=args.output_dir )
+    test_dl=torch_data.DataLoader(test_dataset, args.batch_size, shuffle=False,collate_fn=collate_func,
+                                    num_workers=dataset_cfg.num_workers, pin_memory=True)
+
+    # For printing progress
+    print("Interpolating the fragmented track...")
+    mini_batch_count = 0
+    # Loop over splits and mini-batches
+    filled_dict=defaultdict(lambda : defaultdict(lambda : defaultdict(dict)))
+    with torch.no_grad():
+        for i, data_batch in enumerate(test_dl):
+            data = u.send_to_device(u.convert_double_to_float(data_batch))
+            predictions = model(data_batch)
+            # Show progress
+            yaw=predictions['refined_yaw'].clone()
+            traj=predictions['refined_traj'].clone().squeeze(1)
+            mask=predictions['mask'].clone().squeeze(1)
+
             
-        model = build_and_load_model(args.ckpt_path,dataset_cfg.model_cfg)
-        model.eval()
-        test_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='load_data',output_dir=args.output_dir )
-        test_dl=torch_data.DataLoader(test_dataset, args.batch_size, shuffle=False,collate_fn=collate_func,
-                                        num_workers=dataset_cfg.num_workers, pin_memory=True)
-
-        # For printing progress
-        print("Interpolating the fragmented track...")
-        mini_batch_count = 0
-        # Loop over splits and mini-batches
-        filled_dict=defaultdict(lambda : defaultdict(lambda : defaultdict(dict)))
-        with torch.no_grad():
-            for i, data_batch in enumerate(test_dl):
-                data = u.send_to_device(u.convert_double_to_float(data_batch))
-                predictions = model(data_batch)
-                # Show progress
-                yaw=predictions['refined_yaw'].clone()
-                traj=predictions['refined_traj'].clone().squeeze(1)
-                mask=predictions['mask'].clone().squeeze(1)
-
+            for idx,traj_submask in enumerate(mask):
+                traj_submask=~traj_submask.bool()
+                filled_traj=traj[idx][traj_submask].cpu().numpy()
+                filled_yaw=yaw[idx][traj_submask].cpu().numpy()
+                # motion=data['target_agent_representation']['concat_motion']
+                # motion_mask=~motion['mask'][idx,:,0].bool()
+                # motion_traj=motion['traj'][idx,:,:2][motion_mask]
+                # motion_yaw=motion['traj'][idx,:,2][motion_mask]
+                origin=tuple(data['origin'][idx].cpu().numpy())
+                missing_timestamps=data['missing_timestamps'][idx]
+                tracking_id=data['tracking_id'][idx]
+                scene_token=data['scene_token'][idx]
                 
-                for idx,traj_submask in enumerate(mask):
-                    traj_submask=~traj_submask.bool()
-                    filled_traj=traj[idx][traj_submask].cpu().numpy()
-                    filled_yaw=yaw[idx][traj_submask].cpu().numpy()
-                    # motion=data['target_agent_representation']['concat_motion']
-                    # motion_mask=~motion['mask'][idx,:,0].bool()
-                    # motion_traj=motion['traj'][idx,:,:2][motion_mask]
-                    # motion_yaw=motion['traj'][idx,:,2][motion_mask]
-                    origin=tuple(data['origin'][idx].cpu().numpy())
-                    missing_timestamps=data['missing_timestamps'][idx]
-                    tracking_id=data['tracking_id'][idx]
-                    scene_token=data['scene_token'][idx]
-                    
-                    for idx,timestamp in enumerate(missing_timestamps):
-                        global_coord=local_to_global(origin, tuple(filled_traj[idx]))
-                        global_rotation=get_global_rotation(origin,tuple(filled_yaw[idx]))
-                        box_info={'coord':global_coord,'rotation':global_rotation}
-                        filled_dict[scene_token][tracking_id][timestamp]=box_info
-                if args.verbose:
-                    print("mini batch " + str(mini_batch_count + 1) + '/' + str(len(test_dl)))
-                    mini_batch_count += 1
-        file_name=os.path.join(args.output_dir, 'filling_info_att8.json')
-        # print(filled_dict)
-        with open(file_name, 'w') as handle:
-            json.dump(dict(filled_dict), handle)
+                for idx,timestamp in enumerate(missing_timestamps):
+                    global_coord=local_to_global(origin, tuple(filled_traj[idx]))
+                    global_rotation=get_global_rotation(origin,tuple(filled_yaw[idx]))
+                    box_info={'coord':global_coord,'rotation':global_rotation}
+                    filled_dict[scene_token][tracking_id][timestamp]=box_info
+            if args.verbose:
+                print("mini batch " + str(mini_batch_count + 1) + '/' + str(len(test_dl)))
+                mini_batch_count += 1
+        # file_name=os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json')
+        # # print(filled_dict)
+        # with open(file_name, 'w') as handle:
+        #     json.dump(dict(filled_dict), handle)
     
-    # track_filler=Track_filler(args.result_path, nusc,filled_dict,dataset_cfg, args.data_dir, args.output_dir)
-    # track_filler.create_tracks()
+    track_filler=Track_filler(args.result_path, nusc,filled_dict,dataset_cfg, args.data_dir, args.output_dir)
+    tracks=track_filler.create_tracks()
+    with open(args.result_path, 'r') as handle:
+        ReID_data=json.load(handle)
+    results=map_timestamps_to_sample(tracks,nusc)
+    ReID_data['results']=results
+    with open(os.path.join(args.output_dir,dataset_cfg.VERSION,'final_tracking_result.json'), "w") as f:
+        json.dump(ReID_data, f)

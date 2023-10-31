@@ -36,11 +36,14 @@ class Track_completion_EXT(torch_data.Dataset):
         if not os.path.isdir(Path(data_dir) / dataset_cfg.VERSION):
             os.mkdir(Path(data_dir) / dataset_cfg.VERSION)
         if output_dir is not None:
-            self.save_path = Path(output_dir)
+            self.save_path = Path(output_dir) / dataset_cfg.VERSION
+            self.read_path = Path(data_dir) / dataset_cfg.VERSION
         else:
-            self.save_path = Path(data_dir) / dataset_cfg.VERSION
+            self.read_path = self.save_path = Path(data_dir) / dataset_cfg.VERSION
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
+        if not os.path.isdir(self.read_path):
+            os.mkdir(self.read_path)
         self.cfg_=config_factory('tracking_nips_2019')
         self.dataset_cfg=dataset_cfg
         self.version=dataset_cfg.VERSION
@@ -48,8 +51,10 @@ class Track_completion_EXT(torch_data.Dataset):
         self.helper=PredictHelper_occ(nusc)
         self.mode = mode
         self.motion_time=self.t_h=dataset_cfg.t_h
+        self.interpolate_dist_thresh=dataset_cfg.interpolate_dist_thresh
+        self.interpolate_time_thresh=dataset_cfg.interpolate_time_thresh
         self.eval_split='val'
-        self.token_id_list_file = os.path.join(self.save_path,'token_id_lists.txt')
+        self.token_id_list_file = os.path.join(self.read_path,'token_id_lists.txt')
  
         
         
@@ -106,8 +111,9 @@ class Track_completion_EXT(torch_data.Dataset):
         """
         Function to load dataset statistics like max surrounding agents, max nodes, max edges etc.
         """
-        filename = os.path.join(self.save_path, 'stats.pickle')
+        filename = os.path.join(self.read_path, 'stats.pickle')
         if not os.path.isfile(filename):
+            print('Tried to find ',filename)
             raise Exception('Could not find dataset statistics. Please run the dataset in compute_stats mode')
 
         with open(filename, 'rb') as handle:
@@ -260,7 +266,7 @@ class Track_completion_EXT(torch_data.Dataset):
                     gap_dist=LA.norm(np.array(right_tracking_box.translation[:-1])-np.array(left_tracking_box.translation[:-1]),ord=2)
                     # tracking_box = interpolate_tracking_boxes(left_tracking_box, right_tracking_box, right_ratio)
                     # Interpolate.
-                    if gap_dist<3.0 or ((right_timestamp - left_timestamp)/1e6) < 1.8:
+                    if gap_dist<self.interpolate_dist_thresh or ((right_timestamp - left_timestamp)/1e6) < self.interpolate_time_thresh:
                         tracking_box = interpolate_tracking_boxes(left_tracking_box, right_tracking_box, right_ratio)
                         interpolate_count += 1
                         tracks_by_timestamp[timestamp].append(tracking_box)
@@ -308,7 +314,7 @@ class Track_completion_EXT(torch_data.Dataset):
                     time_query=np.concatenate((times.reshape(-1,1),times.reshape(-1,1)/total_time),axis=1)
                     # right_ratio = float(right_timestamp - timestamp) / (right_timestamp - left_timestamp)
                     gap_dist=LA.norm(np.array(right_tracking_box.translation[:-1])-np.array(left_tracking_box.translation[:-1]),ord=2)
-                    if gap_dist<3.0 or ((right_timestamp - left_timestamp)/1e6) < 1.8:
+                    if gap_dist<self.interpolate_dist_thresh or ((right_timestamp - left_timestamp)/1e6) < self.interpolate_time_thresh:
                         print(tracking_id, timestamp)
                         raise Exception("Previous interpoltion goes wrong!!!")
                     # tracking_box = interpolate_tracking_boxes(left_tracking_box, right_tracking_box, right_ratio)
@@ -444,7 +450,7 @@ class Track_completion_EXT(torch_data.Dataset):
         :param idx: data index
         :return data: Dictionary with batched tensors
         """
-        filename = os.path.join(self.save_path,'preprocess_data', self.token_list[idx] + '.pickle')
+        filename = os.path.join(self.read_path,'preprocess_data', self.token_list[idx] + '.pickle')
 
         if not os.path.isfile(filename):
             raise Exception('Could not find data. Please run the dataset in extract_data mode')
@@ -816,19 +822,21 @@ if __name__ == '__main__':
     
 
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default="configs/nu_configs/nuscenes_dataset_occ.yaml", help='specify the config of dataset')
+    parser.add_argument('--cfg_file', type=str, default="track_completion_model/track_completion.yaml", help='specify the config of dataset')
     parser.add_argument('--result_path', type=str, help='tracking result json file')
     parser.add_argument('--dataroot', type=str, help='path to nuscenes dataset',default="/home/stanliu/data/mnt/nuScenes/")
-    parser.add_argument('--data_dir', type=str, default= 'extrated_data_prediction',help='output dir')
+    parser.add_argument('--data_dir', type=str, default= 'extrated_track_completion_data',help='output dir')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--verbose', type=bool, default= True)
     parser.add_argument('--output_dir', type=str, default= None)
+    parser.add_argument('--version', type=str, default= None)
     parser.add_argument('--skip_compute_stats', action= 'store_false')
     args = parser.parse_args()
 
 
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
-
+    if args.version is not None:
+        dataset_cfg.VERSION=args.version
     
     version = dataset_cfg.VERSION
     if version == 'v1.0-trainval':
@@ -863,12 +871,12 @@ if __name__ == '__main__':
         filename = os.path.join(compute_dataset.save_path, 'stats.pickle')
         with open(filename, 'wb') as handle:
             pickle.dump(stats, handle, protocol=pickle.HIGHEST_PROTOCOL)
-        
+        del compute_dataset,compute_dl
     
     extract_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='extract_data',output_dir=args.output_dir )
     extract_dl=torch_data.DataLoader(extract_dataset, args.batch_size, shuffle=False,
                                     num_workers=dataset_cfg.num_workers, pin_memory=True)
-
+    num_mini_batches = len(extract_dl)
     # For printing progress
     print("Extracting pre-processed data...")
 

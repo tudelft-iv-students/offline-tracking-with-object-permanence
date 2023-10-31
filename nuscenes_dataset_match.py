@@ -847,6 +847,7 @@ if __name__ == '__main__':
                         else:
                             scene_stats[k] = torch.max(v).item()
                 val_dls[scene_idx].dataset.save_data(scene_stats)
+            del val_dls,datasets
     if args.type is None:
         class_names=[
                     'car',

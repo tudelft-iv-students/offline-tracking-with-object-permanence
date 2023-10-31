@@ -17,10 +17,10 @@ This repository contains code for ["Offline Tracking with Object Permanence "](h
 
 
 ## Visualiztion
-
+<p align="middle">
 <img src="assets/vis1.gif" width="450" height="450"/>
 <img src="assets/vis4.gif" width="450" height="450"/>
-
+</p>
 * Rectangels: GT boxes.
 
 * <span style="color:blue">Blue arrows</span>: recovered box centers which are originally missing in the initial tracking result. 

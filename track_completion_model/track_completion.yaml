@@ -1,0 +1,61 @@
+DATASET: 'Track_completion_EXT'
+DATA_PATH: 'extrated_track_completion_data'
+
+VERSION: 'v1.0-trainval'
+t_h: 2.5
+num_workers: 12
+interpolate_dist_thresh: 3.0
+interpolate_time_thresh: 1.8
+model_cfg:
+  # Encoder parameters
+  encoder_type: 'pgp_encoder_occ'
+  encoder_args:
+    map_aggregation: False
+    motion_enc_type: 'ugru'
+    target_agent_feat_size: 6
+    target_agent_emb_size: 24
+    target_agent_enc_size: 32
+    node_feat_size: 8
+    node_emb_size: 24
+    node_enc_size: 48
+    nbr_feat_size: 5
+    nbr_emb_size: 16
+    nbr_enc_size: 32
+    num_gat_layers: 2
+    fuse_map_with_tgt: False
+    encode_sub_node: True
+    concat_latest: False
+    # map_size: 36
+    # tn_head_num: 2
+    
+
+
+
+
+  # Aggregator parameters
+  aggregator_type: 'attn_occ'
+  aggregator_args:
+    method: 'attention'
+    pre_train: False
+    time_emb_size: 12
+    target_emb_size: 32
+    query_enc_size: 48
+    attn_size: 36
+    map_size: 36
+    concat_latest: False
+
+  # Decoder parameters
+  decoder_type: 'mlp_occ'
+  decoder_args:
+    add_attention: True
+    time_emb_size: 48
+    node_enc_size: 72
+    nbr_enc_size: 48
+    refinement: True
+    sep_motion_emb: False
+    motion_emb_size: 18
+    traj_emb_size: 32
+    traj_feat_size: 16
+    use_gru: True
+    add_nbr: False
+    att_radius: 2.0
