@@ -21,6 +21,7 @@ This repository contains code for ["Offline Tracking with Object Permanence "](h
 <img src="assets/vis1.gif" width="450" height="450"/>
 <img src="assets/vis4.gif" width="450" height="450"/>
 </p>
+
 * Rectangels: GT boxes.
 
 * <span style="color:blue">Blue arrows</span>: recovered box centers which are originally missing in the initial tracking result. 
@@ -111,7 +112,7 @@ python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yam
 bash Re-ID_extraction.sh
 ```
 ### Performing Re-ID
-5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets
+5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets. The following command will generate the Re-ID result as a **.json** file, which can be evaluated directly using the standard evaluation code of nuScenes MOT.
 ```
 python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json
 ```
@@ -131,6 +132,20 @@ The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-t
 
 
 * <span style="color:red">Red arrows</span>: Future tracklets with high association scores. 
+
+### Track completion
+Complete the fragmented tracks by interpolating them. First extract the data from the previous Re-ID results
+
+```
+python track_completion_ext.py --result_path mot_results/Re-ID_results/path/to/the/RE-ID/results.json
+```
+where `mot_results/Re-ID_results/path/to/the/RE-ID/results.json` is the path to Re-ID result.
+
+Finally, perform track completioin over the Re-ID results. It will produce the final tracking reult under `mot_results/track_completion_results`.
+
+```
+python track_completion.py --result_path mot_results/Re-ID_results/path/to/the/RE-ID/results.json --ckpt_path track_completion_model/track_completion_att2.tar
+```
 
 ## Training
 

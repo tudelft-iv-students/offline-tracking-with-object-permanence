@@ -197,7 +197,7 @@ class Track_filler():
                                     tracking_box.translation=coord.append(tracking_box.translation[-1])
                                 tracking_box.rotation=rotation
                                 interpolate_count += 1
-                        tracks_by_timestamp[timestamp].append(tracking_box)
+                                tracks_by_timestamp[timestamp].append(tracking_box)
         print('Scene: ', scene_token)
         print('     Number of long interpolations in scene: ', interpolate_count)
         return tracks_by_timestamp
@@ -395,10 +395,10 @@ if __name__ == '__main__':
             if args.verbose:
                 print("mini batch " + str(mini_batch_count + 1) + '/' + str(len(test_dl)))
                 mini_batch_count += 1
-        # file_name=os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json')
-        # # print(filled_dict)
-        # with open(file_name, 'w') as handle:
-        #     json.dump(dict(filled_dict), handle)
+        file_name=os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json')
+        # print(filled_dict)
+        with open(file_name, 'w') as handle:
+            json.dump(dict(filled_dict), handle)
     
     track_filler=Track_filler(args.result_path, nusc,filled_dict,dataset_cfg, args.data_dir, args.output_dir)
     tracks=track_filler.create_tracks()

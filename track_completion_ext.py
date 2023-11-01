@@ -876,10 +876,9 @@ if __name__ == '__main__':
     extract_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='extract_data',output_dir=args.output_dir )
     extract_dl=torch_data.DataLoader(extract_dataset, args.batch_size, shuffle=False,
                                     num_workers=dataset_cfg.num_workers, pin_memory=True)
-    num_mini_batches = len(extract_dl)
     # For printing progress
     print("Extracting pre-processed data...")
-
+    mini_batch_count=0
     # Loop over splits and mini-batches
     for i, _ in enumerate(extract_dl):
 
