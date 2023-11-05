@@ -17,7 +17,7 @@ Our model initially takes the detections from a detector as input. Then it uses 
 ### Re-ID result
 We benchmarked our Re-ID result on the nuScenes test split. The result is shown below and at the [leaderboard](https://nuscenes.org/tracking?externalData=all&mapData=all&modalities=Any).
 
-**We only applied our method to vehicle tracks. For non-vehicle tracks, we keep the original CenterPoint tracking (with NMS). Thus results on non-vehicle classes (i.e. bicycle, motorcycle and pedestrian) should be ignored.**
+**We only applied our method to vehicle tracks. For non-vehicle tracks, we keep the original CenterPoint tracking (with NMS). Therefore, results on non-vehicle classes (i.e. bicycle, motorcycle and pedestrian) should be ignored.**
 <p align="middle">
 
 |   Re-ID Result on Test Split    | AMOTA (%) $\uparrow$| AMOTP (m) $\downarrow$ |   TP $\uparrow$ |   FP $\downarrow$ |   FN $\downarrow$ | IDS $\downarrow$|
@@ -38,7 +38,7 @@ By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lid
 |:-------------------------------:|:--------:|:-----:|:-----:|:-----:|
 | [CenterPoint](https://github.com/tianweiy/CenterPoint) | 70.2 | 59332 | $\mathbf{8 1 9 7}$ | 14704 |
 | [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker) | 72.3 | 59271 | 9593 | 14883 |
-| Offline Track Completion |   72.4   |  $\mathbf{60675}$ | 8953 | $\mathbf{13432}$ | 
+| Offline Track Completion |   $\mathbf{72.4}$   |  $\mathbf{60675}$ | 8953 | $\mathbf{13432}$ | 
 
 </p>
 
