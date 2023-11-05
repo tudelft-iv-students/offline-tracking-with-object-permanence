@@ -4,6 +4,14 @@
 
 This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  This project aims to recover the occluded vehicle trajectories and reduce the identity switches caused by occlusions.
 
+## Overview
+
+<p align="center">
+    <img src="assets/Overview.png" />
+    A brief overview of the offline tracking model. (a) Online tracking result: Each tracklet is represented by a different color (history tracklet: red). (b) Offline Re-ID : The matched pair of tracklets are red. The unmatched ones are black. (c) Recovered trajectory.
+</p>
+
+Our model initially takes the detections from a detector as input. Then it uses an off-the-shelf online tracker to associate detections and generate initial tracklets. Here, we use [CenterPoint](https://github.com/tianweiy/CenterPoint) as the online detector and initial tracker. Next, the Re-ID module tries to associate the possible future tracklets with the terminated history tracklet. If a pair of tracklets are matched, the track completion module interpolates the gap between them by predicting the location and orientation of the missing boxes. Both modules extract motion information and lane map information to produce accurate results. The model finally outputs the track with refined new identities and completes the missing segments within the tracks. 
 
 ## Performance
 ### Re-ID result
@@ -34,19 +42,10 @@ By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lid
 
 </p>
 
-<!-- | Method | AMOTA $\uparrow$ | TP $\uparrow$ | FP $\downarrow$ | FN $\downarrow$ |
-
-| :---: | :---: | :---: | :---: | :---: |
-
-| CenterPoint  | 70.2 | 59332 | $\mathbf{8 1 9 7}$ | 14704 |
-
-| Immortal Tracker | 72.3 | 59271 | 9593 | 14883 |
-
-| Offline Track Completion | $\mathbf{7 2 . 4}$ | $\mathbf{6 0 6 7 5}$ | 8953 | $\mathbf{1 3 4 3 2}$ | -->
 
 ## Visualiztion
 <p align="middle">
-<img src="assets/vis1.gif" width="450" height="450"/><img src="assets/vis4.gif" width="450" height="450"/>
+<img src="assets/vis1.gif" width="350" height="350"/><img src="assets/vis4.gif" width="350" height="350"/>
 </p>
 
 * Rectangels: GT boxes.
