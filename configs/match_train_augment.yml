@@ -21,6 +21,7 @@ train_set_args: &ds_args
   use_home: False
   use_raster: False
   augment: True
+  evaluate: False
 
 val_set_args:
   <<: *ds_args
@@ -32,6 +33,7 @@ val_set_args:
   use_home: False
   use_raster: False
   augment: False
+  evaluate: True
 
 test_set_args:
   <<: *ds_args
@@ -43,12 +45,13 @@ test_set_args:
   use_home: False
   use_raster: False
   augment: False
+  evaluate: True
 
-batch_size: 160
+batch_size: 64
 num_workers: 12
 use_teacher_force: False
 nrow: 6
-pretrain: True
+pretrain: False
 pretrain_epcs: 1
 visualize_start_epoch: 0
 

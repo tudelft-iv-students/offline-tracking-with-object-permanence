@@ -1,11 +1,13 @@
 DATASET: 'Track_completion_EXT'
 DATA_PATH: 'extrated_track_completion_data'
 
-VERSION: 'v1.0-trainval'
+VERSION: 'v1.0-test'
 t_h: 2.5
 num_workers: 12
 interpolate_dist_thresh: 3.0
 interpolate_time_thresh: 1.8
+# interpolate_dist_thresh: 1.0
+# interpolate_time_thresh: 1.0
 model_cfg:
   # Encoder parameters
   encoder_type: 'pgp_encoder_occ'

@@ -9,7 +9,9 @@ MOTION_INFO_PATH: {
 }
 
 batch_size: 32
-motion_ckpt_path: 'motion_associator/motion_associator.tar'
+## Change this to the .tar file containing the trained model parameters for motion branch
+motion_ckpt_path: 'motion_associator/motion_associator.tar' 
+## Change this to the .tar file containing the trained model parameters for map branch
 map_ckpt_path: 'motion_associator/glb_graph_associator.tar'
 
 motion_model_cfg:
