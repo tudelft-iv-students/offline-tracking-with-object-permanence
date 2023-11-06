@@ -474,7 +474,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg_file', type=str, default="data_extraction/nuscenes_dataset_occ.yaml", help='specify the config of dataset')
     # parser.add_argument('--version', type=str, default='v1.0-test', help='')
     parser.add_argument('--result_path', type=str, default='mot_results/v1.0-test/tracking_result.json', help='')
-    parser.add_argument('--data_path', type=str, default="/home/stanliu/data/mnt/nuScenes/nuscenes", help='')
+    parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     parser.add_argument('--ckpt_path', type=str, help='Trained motion matcher', required=False)
     parser.add_argument('--save_dir', type=str, default='mot_results/Re-ID_results/')
     parser.add_argument('--add_map', type=bool, default=True)
@@ -487,7 +487,7 @@ if __name__ == '__main__':
     type_name = dataset_cfg.ASSOCIATION_METHOD
     decay_factor= dataset_cfg.DECAY_FACTOR
     version= dataset_cfg.VERSION
-    nusc = NuScenes(version=version, dataroot=args.data_path, verbose=True)
+    nusc = NuScenes(version=version, dataroot=args.data_root, verbose=True)
     with open(args.result_path,'rb') as f:
         original_data = json.load(f)
     if args.visualize:

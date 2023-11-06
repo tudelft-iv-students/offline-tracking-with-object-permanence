@@ -777,6 +777,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config of dataset')
+    parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     parser.add_argument('--skip_compute_stats',  action='store_true')
     parser.add_argument('--type', default=None)
     # parser.add_argument('--result_path', type=str, default='../mot_results/tracking_result_cp_mini.json', help='')
@@ -794,8 +795,7 @@ if __name__ == '__main__':
     elif version == 'v1.0-mini':
         val_scenes = splits.mini_val
     
-    data_root = "/home/stanliu/data/mnt/nuScenes/nuscenes/"
-    nusc = NuScenes(version=version, dataroot=data_root, verbose=True)
+    nusc = NuScenes(version=version, dataroot=args.data_root, verbose=True)
     helper =PredictHelper_occ(nusc)
     # available_scenes = nuscenes_utils.get_available_scenes(nusc)
     # available_scene_names = [s['name'] for s in available_scenes]

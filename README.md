@@ -116,34 +116,7 @@ pip install tensorboard
         └── visibility.json  
 ```
 
-3. Run the following script to extract pre-processed data. This speeds up training significantly. This may take several hours.
-```shell
-## Preprocess Re-ID data for training
-python preprocess.py -c configs/preprocess_match_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data
-## Preprocess track completion data for training
-python preprocess.py -c configs/preprocess_track_completion_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data
-```
-## Training
 
-To train the Re-ID models from scratch, run
-```shell
-### Train map branch
-python train.py -c configs/match_train_augment.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/map_branch -n 50
-### Train motion branch (Optional)
-python train.py -c configs/configs/match_train_augment_only_motion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/motion_branch -n 50
-```
-
-To train the track completion model from scratch, run
-```shell
-python train.py -c configs/track_completion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data -o track_completion_model/ -n 50
-```
-
-The training script will save training checkpoints and tensorboard logs in the output directory.
-
-To launch tensorboard, run
-```shell
-tensorboard --logdir=path/to/output/directory/tensorboard_logs
-```
 
 ## Inference with online tracking result
 
@@ -152,29 +125,29 @@ tensorboard --logdir=path/to/output/directory/tensorboard_logs
 1. Download the [detection results](https://mitprod-my.sharepoint.com/:f:/g/personal/tianweiy_mit_edu/Eip_tOTYSk5JhdVtVzlXlyABDPnGx9vsnwdo5SRK7bsh8w?e=vSdija) in standard nuScenes submission format. (Note: the link is from [CenterPoint](https://github.com/tianweiy/CenterPoint). Any other detectors will also work as long as it fits the format.) The detection results can be saved in `./det_results/`.
 2. Run the tracking script (TODO: add multiprocessing to make the nms faster)
 ```shell
-python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --nms --version v1.0-test
+python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --nms --version v1.0-test --root path/to/nuScenes/root/directory
 ```
 ### Extract vehicle tracklets and convert to input format for Re-ID
 3. Extract vehicle tracklets
 ```
-python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json
+python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory
 ``` 
 4. Convert to Re-ID input, this may take several hours (TODO: add multiprocessing to make the extraction faster)
 ```
 ## Slower
-#python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml
+#python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --data_root path/to/nuScenes/root/directory
 ## OR a faster way, but more requires computational resources 
-bash Re-ID_extraction.sh
+bash Re-ID_extraction.sh path/to/nuScenes/root/directory
 ```
 ### Performing Re-ID
 5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets. The following command will generate the Re-ID result as a **.json** file, which can be evaluated directly using the standard evaluation code of nuScenes MOT.
 ```
-python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json
+python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory
 ```
 
 6. To visualize all the association result, run
 ```
-python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --visualize
+python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --visualize --data_root path/to/nuScenes/root/directory
 ```
 The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-test/plots`. Note that some times the detections are flipped for 180 degrees. 
 <p align="center">
@@ -192,15 +165,50 @@ The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-t
 Complete the fragmented tracks by interpolating them. To change the split version, please change the cfg file `track_completion_model/track_completion.yaml`. First extract the data from the previous Re-ID results
 
 ```
-python track_completion_ext.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json
+python track_completion_ext.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --data_root path/to/nuScenes/root/directory
 ```
 where `mot_results/Re-ID_results/path/to/the/RE-ID/results.json` is the path to Re-ID result.
 
 Finally, perform track completioin over the Re-ID results. It will produce the final tracking reult under `mot_results/track_completion_results`.
 
 ```
-python track_completion.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --ckpt_path track_completion_model/trained_completion_model.tar
+python track_completion.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --ckpt_path track_completion_model/trained_completion_model.tar --data_root path/to/nuScenes/root/directory
 ```
+
+## Training
+We have already provided the trained Re-ID models under folder `./motion_associator` and track completion model under folder `./track_completion_model`. Alternatively, you can also train yourself following the steps below.
+
+1. Run the following commands to extract pre-processed data for Re-ID. This may take several hours. 
+```shell
+## Preprocess Re-ID data for training
+python preprocess.py -c configs/preprocess_match_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data
+```
+
+2. Run the following commands to extract pre-processed data for track completion. 
+```shell
+ ## Preprocess track completion data for training
+python preprocess.py -c configs/preprocess_track_completion_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data
+```
+
+
+3. To train the Re-ID models from scratch, run
+```shell
+### Train map branch
+python train.py -c configs/match_train_augment.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/map_branch -n 50
+### Train motion branch (Optional)
+python train.py -c configs/configs/match_train_augment_only_motion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/motion_branch -n 50
+```
+
+4. To train the track completion model from scratch, run
+```shell
+python train.py -c configs/track_completion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data -o track_completion_model/ -n 50
+```
+
+5. The training script will save training checkpoints and tensorboard logs in the output directory. To launch tensorboard, run
+```shell
+tensorboard --logdir=path/to/output/directory/tensorboard_logs
+```
+
 
 # Acknowledgement
 This project is built upon the following opensourced projects. We sincerely express our appreciation.

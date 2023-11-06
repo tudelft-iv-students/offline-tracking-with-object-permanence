@@ -57,7 +57,7 @@ def parse_args():
         "--checkpoint", help="the dir to checkpoint which the model read from. You can store the detection result in ../det_result "
     )
     parser.add_argument("--hungarian", action='store_true')
-    parser.add_argument("--root", help="the dir to nusc data ", type=str, default="/home/stanliu/data/mnt/nuScenes/nuscenes")
+    parser.add_argument("--root", help="the dir to nusc data ", type=str, required=True)
     parser.add_argument("--version", type=str, default='v1.0-trainval')
     parser.add_argument("--max_age", type=int, default=3)
     parser.add_argument("--nms", action='store_true')

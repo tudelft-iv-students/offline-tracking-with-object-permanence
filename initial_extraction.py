@@ -284,6 +284,7 @@ if __name__ == '__main__':
     parser.add_argument('--func', type=str, default='extract_data', help='')
     parser.add_argument('--version', type=str, default='v1.0-trainval', help='')
     parser.add_argument('--result_path', type=str, default='mot_results/v1.0-test/tracking_result.json', help='')
+    parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     args = parser.parse_args()
 
     if args.func == 'extract_data':
@@ -299,7 +300,7 @@ if __name__ == '__main__':
         extract_data(
             version=args.version,
             # data_path=ROOT_DIR / 'data' / 'nuscenes',
-            data_path='/home/stanliu/data/mnt/nuScenes/nuscenes',
+            data_path=args.data_root,
             save_path=(Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data'/'final_version_nms',
             max_sweeps=dataset_cfg.MAX_SWEEPS,
             result_path=args.result_path,

@@ -824,7 +824,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default="track_completion_model/track_completion.yaml", help='specify the config of dataset')
     parser.add_argument('--result_path', type=str, help='tracking result json file')
-    parser.add_argument('--dataroot', type=str, help='path to nuscenes dataset',default="/home/stanliu/data/mnt/nuScenes/")
+    parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     parser.add_argument('--data_dir', type=str, default= 'extrated_track_completion_data',help='output dir')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--verbose', type=bool, default= True)
@@ -846,8 +846,7 @@ if __name__ == '__main__':
     elif version == 'v1.0-mini':
         val_scenes = splits.mini_val
     
-    data_root = args.dataroot
-    nusc = NuScenes(version=version, dataroot=data_root, verbose=True)
+    nusc = NuScenes(version=version, dataroot=args.data_root, verbose=True)
     if args.skip_compute_stats:
         print("Computing Stats ...")
         compute_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='compute_stats',output_dir=args.output_dir )

@@ -337,14 +337,14 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', type=bool, default= True)
     parser.add_argument('--output_dir', type=str, default= 'mot_results/track_completion_results')
     parser.add_argument('--ckpt_path', type=str, help='Trained model ckpt', required=True)
+    parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
 
     # parser.add_argument('--skip_compute_stats', action= 'store_false')
     args = parser.parse_args()
 
 
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
-    data_root = "/home/stanliu/data/mnt/nuScenes/"
-    nusc = NuScenes(version=dataset_cfg.VERSION, dataroot=data_root, verbose=True)
+    nusc = NuScenes(version=dataset_cfg.VERSION, dataroot=args.data_root, verbose=True)
     # if Path(os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json')).exists():
     #     print("Found filling info, use the existing one!")
     #     with open(os.path.join(args.data_dir,dataset_cfg.VERSION, 'filling_info.json'), 'r') as handle:
