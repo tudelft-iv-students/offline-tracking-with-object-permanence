@@ -146,7 +146,7 @@ output/test_home/
 *__pycache__/
 *tensorboard_logs/
 *checkpoints/
-*.tar
+# *.tar
 
 output/test*
 preprocess_home_mini/*
