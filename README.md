@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This repository contains code for ["Offline Tracking with Object Permanence "](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  This project aims to recover the occluded vehicle trajectories and reduce the identity switches caused by occlusions.
+This repository contains code for ["Offline Tracking with Object Permanence"](https://arxiv.org/abs/2310.01288) by Xianzhong Liu, Holger Caesar.  This project aims to recover the occluded vehicle trajectories and reduce the identity switches caused by occlusions.
 
 ## Overview
 
@@ -15,14 +15,16 @@ Our model initially takes the detections from a detector as input. Then it uses 
 
 ## Performance
 ### Re-ID result
-We benchmarked our Re-ID result on the nuScenes test split. The result is shown below and at the [leaderboard](https://nuscenes.org/tracking?externalData=all&mapData=all&modalities=Any).
+We benchmarked our Re-ID result on the nuScenes test split. The result is shown below and at the [leaderboard](https://nuscenes.org/tracking?externalData=all&mapData=all&modalities=Any). We used [CenterPoint](https://github.com/tianweiy/CenterPoint) as our base detector.
 
 **We only applied our method to vehicle tracks. For non-vehicle tracks, we keep the original CenterPoint tracking (with NMS). Therefore, results on non-vehicle classes (i.e. bicycle, motorcycle and pedestrian) should be ignored.**
 <p align="middle">
 
 |   Re-ID Result on Test Split    | AMOTA (%) $\uparrow$| AMOTP (m) $\downarrow$ |   TP $\uparrow$ |   FP $\downarrow$ |   FN $\downarrow$ | IDS $\downarrow$|
 |:-------------------------------:|:--------:|:--------:|:-----:|:-----:|:-----:|-----|
-| Offline Re-ID (vehicle classes) |   73.4   |   0.532  | 66644 | 11418 | 14576 | 204 |
+| [CenterPoint](https://github.com/tianweiy/CenterPoint)  |   69.7  |   0.596  | $\mathbf{66725}$ | 12788 | $\mathbf{14359}$ | 340 |
+| [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker) |   70.5   |   0.609  | 66511 | 12133 | 14758 | $\mathbf{155}$ |
+| Offline Re-ID |   $\mathbf{73.4}$   |   $\mathbf{0.532}$  | 66644 | $\mathbf{11418}$ | 14576 | 204 |
 
 </p>
 
@@ -43,12 +45,12 @@ By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lid
 </p>
 
 
-## Visualiztion
+## Visualization
 <p align="middle">
 <img src="assets/vis1.gif" width="350" height="350"/><img src="assets/vis4.gif" width="350" height="350"/>
 </p>
 
-* Rectangels: GT boxes.
+* Rectangles: GT boxes.
 
 * <span style="color:blue">Blue arrows</span>: recovered box centers which are originally missing in the initial tracking result. 
 
