@@ -31,6 +31,7 @@ We benchmarked our Re-ID result on the nuScenes test split. The result is shown 
 By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lidar-based methods and <mark>2<sup>nd</sup></mark> among methods using CenterPoint detections (we only compare vehicle classes).
 
 ### Track completion result
+We show the quantitative results on the validation split over the vehicle classes. We modified the evaluation protocol so that occluded GT boxes are not filtered.
 
 > The track completion model theoretically interpolates non-linear trajectories between fragmented tracklets. However, the standard nuScenes evaluation first filters out the occluded GT boxes then linearly interpolates the occluded trajectories. Therefore, we modified the standard evaluation protocol and evaluate the track completion result locally on the validation split so that occluded GT boxes are retained for evaluation. Note that our models are trained and tuned on the train split. Similarly, we still focus on vehicle tracks.
 
@@ -46,6 +47,7 @@ By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lid
 
 
 ## Visualization
+We show visualization results of the final recovered trajectories from occlusions as blue arrows.  
 <p align="middle">
 <img src="assets/vis1.gif" width="350" height="350"/><img src="assets/vis4.gif" width="350" height="350"/>
 </p>
@@ -60,8 +62,10 @@ By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lid
 
 
 # Getting Started
+We provide the instructions on how to install and run our project.
 
 ## Installation
+0. Install [Python](https://python.land/installing-python) and [Anaconda](https://docs.anaconda.com/free/anaconda/install/index.html) (or [miniconda](https://docs.conda.io/projects/miniconda/en/latest/))
 
 1. Clone this repository 
 
@@ -88,7 +92,7 @@ pip install tensorboard
 ```
 
 
-## Dataset
+## Dataset Preparation
 
 1. Download the [nuScenes dataset](https://www.nuscenes.org/download). For this project we need the following.
     - Metadata for the Trainval split (v1.0)
@@ -178,7 +182,7 @@ python track_completion.py --result_path mot_results/Re-ID_results/path/to/the/R
 ```
 
 ## Training
-We have already provided the trained Re-ID models under folder `./motion_associator` and track completion model under folder `./track_completion_model`. Alternatively, you can also train yourself following the steps below.
+We have already provided the trained Re-ID models under folder `./motion_associator` and track completion model under folder `./track_completion_model` as `.tar` files. Alternatively, you can also train yourself following the steps below.
 
 1. Run the following commands to extract pre-processed data for Re-ID. This may take several hours. 
 ```shell
@@ -225,13 +229,11 @@ This project is built upon the following opensourced projects. We sincerely expr
 # Citation
 Please use the following citation when referencing
 ```bibtex
-@misc{liu2023offline,
+@article{liu2023offline,
       title={Offline Tracking with Object Permanence}, 
       author={Xianzhong Liu and Holger Caesar},
-      year={2023},
-      eprint={2310.01288},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV}
+      journal={arXiv preprint arXiv:2310.01288},
+      year={2023}
 }
 ```
 
