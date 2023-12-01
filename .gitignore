@@ -160,11 +160,8 @@ nuscenes-prediction-challenge-trajectory-sets/
 slurm*
 *.pickle
 *.ipynb
-# det_results/*
-# mot_results/*
 *.json
 *.pkl
-# extracted_mot_data/*
-mot_results/Re-ID_results/matching_info/v1.0-test/plots/
-
-# *.txt
+mot_results/*
+*/token_id_lists.txt
+extrated_track_completion_data/

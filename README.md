@@ -84,11 +84,6 @@ pip install nuscenes-devkit
 # Pytorch: The code has been tested with Pytorch 1.7.1, CUDA 10.1, but should work with newer versions
 conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=10.1 -c pytorch
 
-# Additional utilities
-pip install psutil
-pip install positional-encodings
-pip install imageio
-pip install tensorboard
 ```
 
 

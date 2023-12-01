@@ -1,5 +1,5 @@
 DATA_DIR: 'extracted_mot_data/final_version_nms'
-VERSION: 'v1.0-test'
+VERSION: 'v1.0-trainval'
 ASSOCIATION_THRESHOLD: 0.9
 ASSOCIATION_METHOD: greedy
 DECAY_FACTOR: 0.975

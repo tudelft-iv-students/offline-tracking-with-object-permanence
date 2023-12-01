@@ -34,16 +34,16 @@ class Track_completion_EXT(torch_data.Dataset):
             except:
                 raise Exception('Specify version!')
         if not os.path.isdir(Path(data_dir) / dataset_cfg.VERSION):
-            os.mkdir(Path(data_dir) / dataset_cfg.VERSION)
+            Path(Path(data_dir) / dataset_cfg.VERSION).mkdir(parents=True, exist_ok=True)
         if output_dir is not None:
             self.save_path = Path(output_dir) / dataset_cfg.VERSION
             self.read_path = Path(data_dir) / dataset_cfg.VERSION
         else:
             self.read_path = self.save_path = Path(data_dir) / dataset_cfg.VERSION
         if not os.path.isdir(self.save_path):
-            os.mkdir(self.save_path)
+            Path(self.save_path).mkdir(parents=True, exist_ok=True)
         if not os.path.isdir(self.read_path):
-            os.mkdir(self.read_path)
+            Path(self.read_path).mkdir(parents=True, exist_ok=True)
         self.cfg_=config_factory('tracking_nips_2019')
         self.dataset_cfg=dataset_cfg
         self.version=dataset_cfg.VERSION
@@ -825,13 +825,15 @@ if __name__ == '__main__':
     parser.add_argument('--cfg_file', type=str, default="track_completion_model/track_completion.yaml", help='specify the config of dataset')
     parser.add_argument('--result_path', type=str, help='tracking result json file')
     parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
-    parser.add_argument('--data_dir', type=str, default= 'extrated_track_completion_data',help='output dir')
+    parser.add_argument('--data_dir', type=str, default= 'extracted_track_completion_data',help='output dir')
+    parser.add_argument('--tracker_name', type=str, default= 'CenterPoint',help='tracker name')
     parser.add_argument('--batch_size', type=int, default=32)
     parser.add_argument('--verbose', type=bool, default= True)
     parser.add_argument('--output_dir', type=str, default= None)
     parser.add_argument('--version', type=str, default= None)
     parser.add_argument('--skip_compute_stats', action= 'store_false')
     args = parser.parse_args()
+    args.data_dir=os.path.join(args.data_dir,args.tracker_name)
 
 
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))

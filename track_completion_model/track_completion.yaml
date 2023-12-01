@@ -1,7 +1,7 @@
 DATASET: 'Track_completion_EXT'
 DATA_PATH: 'extrated_track_completion_data'
 
-VERSION: 'v1.0-test'
+VERSION: 'v1.0-trainval'
 t_h: 2.5
 num_workers: 12
 interpolate_dist_thresh: 3.0

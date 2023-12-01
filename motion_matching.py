@@ -76,7 +76,7 @@ def convert_double_to_float(data: Union[Dict, torch.Tensor]):
     else:
         return data
 
-def make_scene_datasets(args,dataset_cfg,nusc,class_name,mode='load_data'):
+def make_scene_datasets(args,dataset_cfg,nusc,class_name,tracker,mode='load_data'):
     version = dataset_cfg.VERSION
     if version == 'v1.0-trainval':
         val_scenes = splits.val
@@ -91,7 +91,8 @@ def make_scene_datasets(args,dataset_cfg,nusc,class_name,mode='load_data'):
     for scene_idx in range(len(val_scenes)):
         dataset=NuScenesDataset_MATCH_EXT(scene_idx,
             dataset_cfg=dataset_cfg, class_name=class_name,
-            logger=create_logger(),helper=helper,mode=mode)
+            logger=create_logger(),helper=helper,mode=mode,
+            tracker_name=tracker)
         if not dataset.skip:
             datasets.append(dataset)
     return datasets
@@ -268,9 +269,9 @@ def send_to_device(data: Union[Dict, torch.Tensor]):
     else:
         return data
 
-def save_decay_matrix(dataset_cfg,args,nusc,match_info_dir,class_name):
+def save_decay_matrix(dataset_cfg,args,nusc,match_info_dir,class_name,tracker):
     file_name=class_name + '_' + 'match_info.pkl'
-    datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name,mode='add_time_decay')
+    datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name,tracker=tracker,mode='add_time_decay')
     if ((match_info_dir / file_name).exists()):
         
         with open(match_info_dir / file_name, 'rb') as f:
@@ -293,7 +294,7 @@ def save_decay_matrix(dataset_cfg,args,nusc,match_info_dir,class_name):
         raise Exception("No match info!!!")
 
 
-def get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name):
+def get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name,tracker):
     file_name=class_name + '_' + 'match_info.pkl'
     if ((match_info_dir / file_name).exists()):
     
@@ -303,7 +304,7 @@ def get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name):
         similairty_matrices,similarity_matrices_with_map,id_lists,s_t_list = match_info
         return similairty_matrices,similarity_matrices_with_map,id_lists,s_t_list
     else:
-        datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name)
+        datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name,tracker)
         dataloaders = [DataLoader(
             nuscenes_dataset, batch_size=dataset_cfg.batch_size, pin_memory=True, num_workers=12,
             shuffle=False, collate_fn=match_collate,
@@ -349,7 +350,7 @@ def get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name):
         return similairty_matrices,similarity_matrices_with_map,id_lists,s_t_list
 
 def visualization_function(dataset_cfg,args,nusc,img_save_dir,class_name):
-    datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name)
+    datasets=make_scene_datasets(args,dataset_cfg,nusc,class_name,tracker=args.tracker_name)
     dataloaders = [DataLoader(
         nuscenes_dataset, batch_size=dataset_cfg.batch_size, pin_memory=True, num_workers=12,
         shuffle=False, collate_fn=match_collate,
@@ -471,19 +472,20 @@ if __name__ == '__main__':
     from easydict import EasyDict
 
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default="data_extraction/nuscenes_dataset_occ.yaml", help='specify the config of dataset')
+    parser.add_argument('--cfg_file', type=str, default="motion_associator/re-association.yaml", help='specify the config of dataset')
     # parser.add_argument('--version', type=str, default='v1.0-test', help='')
     parser.add_argument('--result_path', type=str, default='mot_results/v1.0-test/tracking_result.json', help='')
     parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     parser.add_argument('--ckpt_path', type=str, help='Trained motion matcher', required=False)
     parser.add_argument('--save_dir', type=str, default='mot_results/Re-ID_results/')
+    parser.add_argument('--tracker_name', type=str, default='CenterPoint')
     parser.add_argument('--add_map', type=bool, default=True)
     parser.add_argument('--visualize', action='store_true')
     args = parser.parse_args()
     
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
     thresh = dataset_cfg.ASSOCIATION_THRESHOLD
-    DATA_DIR = dataset_cfg.DATA_DIR
+    DATA_DIR = os.path.join(dataset_cfg.DATA_DIR,args.tracker_name)
     type_name = dataset_cfg.ASSOCIATION_METHOD
     decay_factor= dataset_cfg.DECAY_FACTOR
     version= dataset_cfg.VERSION
@@ -491,14 +493,14 @@ if __name__ == '__main__':
     with open(args.result_path,'rb') as f:
         original_data = json.load(f)
     if args.visualize:
-        match_info_dir=Path(os.path.join(args.save_dir,'matching_info',version,'plots'))
+        match_info_dir=Path(os.path.join(args.save_dir,args.tracker_name,'matching_info',version,'plots'))
         match_info_dir.mkdir(parents=True, exist_ok=True) 
         for class_name in class_names:
             visualization_function(dataset_cfg,args,nusc,match_info_dir,class_name)
 
 
     else:
-        match_info_dir=Path(os.path.join(args.save_dir,'matching_info',version))
+        match_info_dir=Path(os.path.join(args.save_dir,args.tracker_name,'matching_info',version))
         match_info_dir.mkdir(parents=True, exist_ok=True) 
 
         similarity_matrices={}
@@ -506,7 +508,7 @@ if __name__ == '__main__':
         id_lists={}
         s_t_lists={}
         for class_name in class_names:
-            similarity_matrix, map_similarity_matrix,id_list,s_t_list =get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name)
+            similarity_matrix, map_similarity_matrix,id_list,s_t_list =get_similarity_matrix(dataset_cfg,args,nusc,match_info_dir,class_name,tracker=args.tracker_name)
             similarity_matrices[class_name] = similarity_matrix
             map_similarity_matrices[class_name] = map_similarity_matrix
             id_lists[class_name] = id_list
@@ -514,19 +516,21 @@ if __name__ == '__main__':
 
         data=copy.deepcopy(original_data)
         result=data['results']
-        refined_result=refine_association(result,
-                                        nusc,
-                                        thresh,
-                                        type_name,
-                                        similarity_matrices,
-                                        id_lists,
-                                        s_t_lists,
-                                        DATA_DIR,
-                                        map_similarity_matrices,
-                                        decay_factor=decay_factor,
-                                        version=version)
-        data['results']=refined_result
-        data['meta']['use_map']=True
-        Path(os.path.join(args.save_dir,'motion_refine_with_map',version)).mkdir(parents=True, exist_ok=True) 
-        with open(os.path.join(args.save_dir,'motion_refine_with_map',version,type_name+str(thresh)+'_tracking_result.json'), "w") as f:
-            json.dump(data, f)
+        for asso_thresh in range(5,9):
+            thresh=asso_thresh/10
+            refined_result=refine_association(result,
+                                            nusc,
+                                            thresh,
+                                            type_name,
+                                            similarity_matrices,
+                                            id_lists,
+                                            s_t_lists,
+                                            DATA_DIR,
+                                            map_similarity_matrices,
+                                            decay_factor=decay_factor,
+                                            version=version)
+            data['results']=refined_result
+            data['meta']['use_map']=True
+            Path(os.path.join(args.save_dir,args.tracker_name,'motion_refine_with_map',version)).mkdir(parents=True, exist_ok=True) 
+            with open(os.path.join(args.save_dir,args.tracker_name,'motion_refine_with_map',version,type_name+str(thresh)+'_tracking_result.json'), "w") as f:
+                json.dump(data, f)

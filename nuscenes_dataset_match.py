@@ -99,7 +99,7 @@ def list_to_tensor(feat_list: List[np.ndarray], max_num: int, max_len: int,
     return feat_array, mask_array
 
 class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
-    def __init__(self, scene_idx, dataset_cfg, class_name,  helper, mode,root_path=None, logger=None):
+    def __init__(self, scene_idx, dataset_cfg, class_name,  helper, mode,tracker_name='CenterPoint', logger=None):
         # if root_path is None:
         #     raise NotImplementedError()
         super().__init__()
@@ -108,10 +108,10 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
                 dataset_cfg.VERSION = dataset_cfg.version
             except:
                 raise Exception('Specify version!')
-        self.save_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data' / 'final_version_nms'/ dataset_cfg.VERSION / class_name
+        self.save_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data' / 'final_version_nms'/ tracker_name/dataset_cfg.VERSION / class_name
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
-        self.info_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/ dataset_cfg.VERSION
+        self.info_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/ tracker_name/dataset_cfg.VERSION
         self.dataset_cfg=dataset_cfg
         self.version=dataset_cfg.VERSION
         self.logger = logger
@@ -461,7 +461,7 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
             filepath=database_save_path / 'stats.pickle'
         
         if not os.path.isfile(filepath):
-            raise Exception('Could not find data. Please run the dataset in extract_data mode')
+            raise Exception('Could not find data. Please run the dataset in extract_data mode. Expecting file : ',filepath)
 
         with open(filepath, 'rb') as handle:
             data = pickle.load(handle)
@@ -779,6 +779,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config of dataset')
     parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     parser.add_argument('--skip_compute_stats',  action='store_true')
+    parser.add_argument('--tracker_name', type=str, default='CenterPoint', help='tracker name')
     parser.add_argument('--type', default=None)
     # parser.add_argument('--result_path', type=str, default='../mot_results/tracking_result_cp_mini.json', help='')
     args = parser.parse_args()
@@ -827,7 +828,7 @@ if __name__ == '__main__':
             for scene_idx in range(len(val_scenes)):
                 datasets.append(NuScenesDataset_MATCH_EXT(scene_idx,
                     dataset_cfg=dataset_cfg, class_name=class_name,
-                    root_path=ROOT_DIR / 'data' / 'nuscenes',
+                    tracker_name=args.tracker_name,
                     logger=create_logger(),helper=helper,mode='compute_stats'
                 ))
                 # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
@@ -862,7 +863,7 @@ if __name__ == '__main__':
         for scene_idx in range(len(val_scenes)):
             datasets.append(NuScenesDataset_MATCH_EXT(scene_idx,
                 dataset_cfg=dataset_cfg, class_name=class_name,
-                root_path=ROOT_DIR / 'data' / 'nuscenes',
+                tracker_name=args.tracker_name,
                 logger=create_logger(),helper=helper,mode='extract_data'
             ))
             # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)

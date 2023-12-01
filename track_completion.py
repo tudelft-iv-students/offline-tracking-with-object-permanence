@@ -332,16 +332,18 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default="track_completion_model/track_completion.yaml", help='specify the config of dataset')
     parser.add_argument('--result_path', type=str, help='tracking result json file')
-    parser.add_argument('--data_dir', type=str, default= 'extrated_track_completion_data',help='data dir')
+    parser.add_argument('--data_dir', type=str, default= 'extracted_track_completion_data',help='data dir')
     parser.add_argument('--batch_size', type=int, default= 32)
     parser.add_argument('--verbose', type=bool, default= True)
+    parser.add_argument('--tracker_name', type=str, default= 'CenterPoint',help='tracker name')
     parser.add_argument('--output_dir', type=str, default= 'mot_results/track_completion_results')
     parser.add_argument('--ckpt_path', type=str, help='Trained model ckpt', required=True)
     parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
 
     # parser.add_argument('--skip_compute_stats', action= 'store_false')
     args = parser.parse_args()
-
+    args.data_dir = os.path.join(args.data_dir,args.tracker_name)
+    args.output_dir = os.path.join(args.output_dir,args.tracker_name)
 
     dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
     nusc = NuScenes(version=dataset_cfg.VERSION, dataroot=args.data_root, verbose=True)
