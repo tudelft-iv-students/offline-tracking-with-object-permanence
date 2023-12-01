@@ -4,7 +4,7 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 from typing import Dict
 from models.library.blocks import *
-from return_device import return_device
+from train_eval.utils import return_device
 import math
 device = return_device()
 

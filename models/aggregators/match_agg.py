@@ -3,14 +3,10 @@ import torch.nn as nn
 from models.aggregators.aggregator import PredictionAggregator
 from typing import Dict, Tuple
 from models.library.blocks import *
-from models.encoders.pgp_encoder_v1 import GAT,PGPEncoder_occ
 
 
 class Match_agg(PredictionAggregator):
-    """
-    Aggregate context encoding using scaled dot product attention. Query obtained using target agent encoding,
-    Keys and values obtained using map and surrounding agent encodings.
-    """
+
 
     def __init__(self, args: Dict):
 
@@ -48,7 +44,7 @@ class Match_agg(PredictionAggregator):
         elif self.agg_type=='GAT':
             map_enc=encodings['context_encoding']
             lane_node_enc=map_enc['lane_enc']
-            adj_mat = PGPEncoder_occ.build_adj_mat(map_enc['s_next'], map_enc['edge_type'])
+            adj_mat = self.build_adj_mat(map_enc['s_next'], map_enc['edge_type'])
             for gat_layer in self.gat:
                 lane_node_enc += gat_layer(lane_node_enc, adj_mat)
             encodings['context_encoding']['lane_enc']=lane_node_enc
@@ -73,5 +69,27 @@ class Match_agg(PredictionAggregator):
         combined_enc = torch.cat(encodings, dim=1)
         combined_masks = torch.cat(masks, dim=1).bool()
         return combined_enc, combined_masks
+    
+    @staticmethod
+    def build_adj_mat(s_next, edge_type):
+        """
+        Builds adjacency matrix for GAT layers.
+        """
+        batch_size = s_next.shape[0]
+        max_nodes = s_next.shape[1]
+        max_edges = s_next.shape[2]
+        adj_mat = torch.diag(torch.ones(max_nodes, device=s_next.device)).unsqueeze(0).repeat(batch_size, 1, 1).bool()
+
+        dummy_vals = torch.arange(max_nodes, device=s_next.device).unsqueeze(0).unsqueeze(2).repeat(batch_size, 1, max_edges)
+        dummy_vals = dummy_vals.float()
+        s_next[edge_type == 0] = dummy_vals[edge_type == 0]
+        batch_indices = torch.arange(batch_size).unsqueeze(1).unsqueeze(2).repeat(1, max_nodes, max_edges)
+        src_indices = torch.arange(max_nodes).unsqueeze(0).unsqueeze(2).repeat(batch_size, 1, max_edges)
+        adj_mat[batch_indices[:, :, :-1], src_indices[:, :, :-1], s_next[:, :, :-1].long()] = True
+        adj_mat = adj_mat | torch.transpose(adj_mat, 1, 2)
+
+        return adj_mat
+    
+    
 
 

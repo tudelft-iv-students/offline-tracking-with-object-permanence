@@ -14,6 +14,39 @@ def get_track_mask(agent_representation):
     tracks=agent_representation.view(-1,agent_representation.shape[-2],agent_representation.shape[-1])[:,:,-1]
     return (tracks.sum(dim=-1)>0)
 
+
+class GAT(nn.Module):
+    """
+    GAT layer for aggregating local context at each lane node. Uses scaled dot product attention using pytorch's
+    multihead attention module.
+    """
+    def __init__(self, in_channels, out_channels):
+        """
+        Initialize GAT layer.
+        :param in_channels: size of node encodings
+        :param out_channels: size of aggregated node encodings
+        """
+        super().__init__()
+        self.query_emb = nn.Linear(in_channels, out_channels)
+        self.key_emb = nn.Linear(in_channels, out_channels)
+        self.val_emb = nn.Linear(in_channels, out_channels)
+        self.att = nn.MultiheadAttention(out_channels, 1)
+
+    def forward(self, node_encodings, adj_mat):
+        """
+        Forward pass for GAT layer
+        :param node_encodings: Tensor of node encodings, shape [batch_size, max_nodes, node_enc_size]
+        :param adj_mat: Bool tensor, adjacency matrix for edges, shape [batch_size, max_nodes, max_nodes]
+        :return:
+        """
+        queries = self.query_emb(node_encodings.permute(1, 0, 2))
+        keys = self.key_emb(node_encodings.permute(1, 0, 2))
+        vals = self.val_emb(node_encodings.permute(1, 0, 2))
+        att_op, _ = self.att(queries, keys, vals, attn_mask=~adj_mat)
+
+        return att_op.permute(1, 0, 2)
+
+
 class Home_temp_enocder(nn.Module):
     def __init__(self, conv1d_n_in, conv1d_n_out, gru_in_hidden_feat, gru_in_out_feat):
         super(Home_temp_enocder, self).__init__()

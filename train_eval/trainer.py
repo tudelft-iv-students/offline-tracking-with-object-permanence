@@ -19,7 +19,7 @@ from datasets.nuScenes.prediction import PredictHelper_occ
 # os.environ["NUMEXPR_NUM_THREADS"] = "6"
 # os.environ["OMP_NUM_THREADS"] = "6"
 
-from return_device import return_device
+from train_eval.utils import return_device
 device = return_device()
 
 

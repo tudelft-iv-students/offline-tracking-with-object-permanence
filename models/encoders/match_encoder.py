@@ -4,36 +4,15 @@ import torch.nn as nn
 from torch.nn.utils.rnn import pack_padded_sequence,pad_packed_sequence
 from typing import Dict
 from models.library.blocks import *
-from return_device import return_device
+from train_eval.utils import return_device
 import math
-from models.encoders.pgp_encoder import PGPEncoder
+
 device = return_device()
 
 
 class MatchEncoder(PredictionEncoder):
 
     def __init__(self, args: Dict):
-        """
-        GRU based encoder from PGP. Lane node features and agent histories encoded using GRUs.
-        Additionally, agent-node attention layers infuse each node encoding with nearby agent context.
-        Finally GAT layers aggregate local context at each node.
-
-        args to include:
-
-        target_agent_feat_size: int Size of target agent features
-        target_agent_emb_size: int Size of target agent embedding
-        taret_agent_enc_size: int Size of hidden state of target agent GRU encoder
-
-        node_feat_size: int Size of lane node features
-        node_emb_size: int Size of lane node embedding
-        node_enc_size: int Size of hidden state of lane node GRU encoder
-
-        nbr_feat_size: int Size of neighboring agent features
-        nbr_enb_size: int Size of neighboring agent embeddings
-        nbr_enc_size: int Size of hidden state of neighboring agent GRU encoders
-
-        num_gat_layers: int Number of GAT layers to use.
-        """
 
         super().__init__()
         
@@ -54,47 +33,6 @@ class MatchEncoder(PredictionEncoder):
         self.bi_gru = nn.GRU(args['target_emb_size'], args['past_enc_size'], batch_first=True, bidirectional= True)
         self.target_past_enc = nn.GRU(args['target_emb_size'], args['past_enc_size'], batch_first=True)
         self.target_future_enc = nn.GRU(args['target_emb_size']+args['past_enc_size'], args['future_enc_size'], batch_first=True)
-        
-        
-        # if self.fuse_map_with_tgt:
-        #     # self.target_past_mixer = leaky_MLP(args['target_agent_emb_size']*2, args['target_agent_emb_size'])
-        #     # self.target_fut_mixer = leaky_MLP(args['target_agent_emb_size']*2, args['target_agent_emb_size'])
-        #     self.map_aggtor = Att(n_agt=args['target_agent_emb_size'],n_ctx=args['node_enc_size'])
-        
-        # self.target_fut_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
-        # self.target_past_enc = nn.GRU(args['target_agent_emb_size']*2, args['target_agent_enc_size'], batch_first=True)
-            
-
-        # # Node encoders
-        # self.node_emb = nn.Linear(args['node_feat_size'], args['node_emb_size'])
-        # if self.encode_sub_node:
-        #     self.subnode_emb = nn.Linear(args['node_feat_size'], args['node_emb_size'])
-        #     self.sub_node_encoder = nn.GRU(args['node_emb_size'], args['node_emb_size'], batch_first=True, bidirectional= True)
-        #     self.sub_nbr_encoder = nn.GRU(args['nbr_emb_size'], args['nbr_emb_size'], batch_first=True, bidirectional= True)
-            
-
-        # # Surrounding agent encoder
-        # self.nbr_emb = nn.Linear(args['nbr_feat_size'], args['nbr_emb_size'])
-             
-        # if self.map_aggregation:
-        #     self.node_encoder = nn.GRU(args['node_emb_size'], args['node_enc_size'], batch_first=True)
-        #     self.nbr_enc = nn.GRU(args['nbr_emb_size'], args['nbr_enc_size'], batch_first=True)
-        #     # Agent-node attention
-        #     self.query_emb = nn.Linear(args['node_enc_size'], args['node_enc_size'])
-        #     self.key_emb = nn.Linear(args['nbr_enc_size'], args['node_enc_size'])
-        #     self.val_emb = nn.Linear(args['nbr_enc_size'], args['node_enc_size'])
-        #     self.a_n_att = nn.MultiheadAttention(args['node_enc_size'], num_heads=1)
-        #     self.mix = nn.Linear(args['node_enc_size']*2, args['node_enc_size'])
-        #     # GAT layers
-        #     self.gat = nn.ModuleList([GAT(args['node_enc_size'], args['node_enc_size'])
-        #                             for _ in range(args['num_gat_layers'])])
-        
-        # Target node attention
-        # self.nd_tgt_emb = nn.Linear(args['target_agent_enc_size'], args['map_size'])
-        # self.nd_key_emb = nn.Linear(args['node_enc_size'], args['map_size'])
-        # self.nd_val_emb = nn.Linear(args['node_enc_size'], args['map_size'])
-        # self.t_n_att = nn.MultiheadAttention(args['map_size'], num_heads=args['tn_head_num'])
-        # self.tn_head_num=args['tn_head_num']
 
         # Non-linearities
         self.leaky_relu = nn.LeakyReLU(0.1)
@@ -102,33 +40,7 @@ class MatchEncoder(PredictionEncoder):
         
 
     def forward(self, inputs: Dict) -> Dict:
-        """
-        Forward pass for PGP encoder
-        :param inputs: Dictionary with
-            target_agent_representation: torch.Tensor, shape [batch_size, t_h, target_agent_feat_size]
-            map_representation: Dict with
-                'lane_node_feats': torch.Tensor, shape [batch_size, max_nodes, max_poses, node_feat_size]
-                'lane_node_masks': torch.Tensor, shape [batch_size, max_nodes, max_poses, node_feat_size]
-
-                (Optional)
-                's_next': Edge look-up table pointing to destination node from source node
-                'edge_type': Look-up table with edge type
-
-            surrounding_agent_representation: Dict with
-                'vehicles': torch.Tensor, shape [batch_size, max_vehicles, t_h, nbr_feat_size]
-                'vehicle_masks': torch.Tensor, shape [batch_size, max_vehicles, t_h, nbr_feat_size]
-                'pedestrians': torch.Tensor, shape [batch_size, max_peds, t_h, nbr_feat_size]
-                'pedestrian_masks': torch.Tensor, shape [batch_size, max_peds, t_h, nbr_feat_size]
-            agent_node_masks:  Dict with
-                'vehicles': torch.Tensor, shape [batch_size, max_nodes, max_vehicles]
-                'pedestrians': torch.Tensor, shape [batch_size, max_nodes, max_pedestrians]
-
-            Optionally may also include the following if edges are defined for graph traversal
-            'init_node': Initial node in the lane graph based on track history.
-            'node_seq_gt': Ground truth node sequence for pre-training
-
-        :return:
-        """
+       
 
         # Encode target agent
         history = inputs['history']
@@ -181,7 +93,7 @@ class MatchEncoder(PredictionEncoder):
             lane_subnode_embedding=lane_subnode_embedding.view(lane_subnode_embedding.shape[0],lane_node_feats.shape[1],
                                                                lane_node_feats.shape[2],lane_subnode_embedding.shape[-1])
             bigru_lane_feats = node_gru_enc(lane_node_masks, lane_subnode_embedding, self.lane_bi_gru)
-            lane_node_encodings = PGPEncoder.variable_size_gru_encode(bigru_lane_feats, lane_node_masks, self.lane_node_aggtor)
+            lane_node_encodings = self.variable_size_gru_encode(bigru_lane_feats, lane_node_masks, self.lane_node_aggtor)
             # Return encodings
             if 's_next' in inputs['map_representation'].keys():
                 s_next=inputs['map_representation']['s_next']
@@ -206,6 +118,43 @@ class MatchEncoder(PredictionEncoder):
       
 
         return encodings
+    
+    @staticmethod
+    def variable_size_gru_encode(feat_embedding: torch.Tensor, masks: torch.Tensor, gru: nn.GRU) -> torch.Tensor:
+        """
+        Returns GRU encoding for a batch of inputs where each sample in the batch is a set of a variable number
+        of sequences, of variable lengths.
+        """
+
+        # Form a large batch of all sequences in the batch
+        masks_for_batching = ~masks[:, :, :, 0].bool()
+        masks_for_batching = masks_for_batching.any(dim=-1).unsqueeze(2).unsqueeze(3)
+        feat_embedding_batched = torch.masked_select(feat_embedding, masks_for_batching)# select the feature from actual lane nodes and get rid of padded placeholder
+        feat_embedding_batched = feat_embedding_batched.view(-1, feat_embedding.shape[2], feat_embedding.shape[3])
+
+        # Pack padded sequences
+        seq_lens = torch.sum(1 - masks[:, :, :, 0], dim=-1)
+        seq_lens_batched = seq_lens[seq_lens != 0].cpu()
+        if len(seq_lens_batched) != 0:
+            feat_embedding_packed = pack_padded_sequence(feat_embedding_batched, seq_lens_batched,
+                                                         batch_first=True, enforce_sorted=False)
+
+            # Encode
+            _, encoding_batched = gru(feat_embedding_packed)
+            encoding_batched = encoding_batched.squeeze(0)
+
+            # Scatter back to appropriate batch index
+            masks_for_scattering = masks_for_batching.squeeze(3).repeat(1, 1, encoding_batched.shape[-1])
+            encoding = torch.zeros(masks_for_scattering.shape, device=device)
+            encoding = encoding.masked_scatter(masks_for_scattering, encoding_batched)
+
+        else:
+            batch_size = feat_embedding.shape[0]
+            max_num = feat_embedding.shape[1]
+            hidden_state_size = gru.hidden_size
+            encoding = torch.zeros((batch_size, max_num, hidden_state_size), device=feat_embedding.device)
+
+        return encoding
     
 def rev_gru_encode(feat_embedding: torch.Tensor, masks: torch.Tensor, bi_gru: nn.GRU, h0: torch.Tensor) -> torch.Tensor:
     """

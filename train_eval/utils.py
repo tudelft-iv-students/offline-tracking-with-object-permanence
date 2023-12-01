@@ -4,7 +4,6 @@ import torch
 import numpy as np
 import os
 from datasets.nuScenes.prediction import PredictHelper_occ
-from return_device import return_device
 from nuscenes.prediction.input_representation.static_layers import *
 from nuscenes.prediction.input_representation.combinators import Rasterizer
 from pyquaternion import Quaternion
@@ -13,9 +12,13 @@ import logging
 from numpy import linalg as LA
 import matplotlib.pyplot as plt
 import matplotlib.image as im
+
+
+def return_device():
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    return device
+
 device = return_device()
-
-
 
 def convert_double_to_float(data: Union[Dict, torch.Tensor]):
     """

@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from math import exp
 from torch.autograd import Variable
 import torch.nn.functional as F
-from return_device import return_device
+from train_eval.utils import return_device
 device = return_device()
 
 def gaussian(window_size, sigma=4.0):
