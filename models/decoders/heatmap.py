@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union
 from models.decoders.ram_decoder import get_dense,get_index
-from return_device import return_device
+from train_eval.utils import return_device
 from models.library.sampler import TorchModalitySampler
 from models.library.blocks import LayerNorm
 device = return_device()

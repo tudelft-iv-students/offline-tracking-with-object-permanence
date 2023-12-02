@@ -14,23 +14,13 @@ from models.model import PredictionModel
 
 # from models.encoders.home_encoder import HomeEncoder
 # from models.encoders.raster_encoder import RasterEncoder
-from models.encoders.polyline_subgraph import PolylineSubgraphs
-from models.encoders.pgp_encoder import PGPEncoder
 from models.encoders.track_completion_encoder import Encoder_occ
 from models.encoders.match_encoder import MatchEncoder
-from models.aggregators.concat import Concat
-from models.aggregators.global_attention import GlobalAttention
-from models.aggregators.goal_conditioned import GoalConditioned
 # from models.aggregators.home_agg import Sample2DAggregator
 # from models.aggregators.home_orig import HomeAggregator
 from models.aggregators.attention_occ import Attention_occ
 from models.aggregators.match_agg import Match_agg
-from models.aggregators.pgp import PGP
 # from models.aggregators.ram_agg import RamAggregator
-from models.decoders.mtp import MTP
-from models.decoders.multipath import Multipath
-from models.decoders.covernet import CoverNet
-# from models.decoders.lvm import LVM
 # from models.decoders.ram_decoder import RamDecoder
 # from models.decoders.heatmap import HTMAP
 # from models.decoders.home_decoder import HomeDecoder
@@ -38,7 +28,6 @@ from models.decoders.covernet import CoverNet
 from models.decoders.mlp_occ import MLP_occ
 from models.decoders.match_decoder import Match_decoder
 # Import metrics
-from metrics.mtp_loss import MTPLoss
 from metrics.min_ade import MinADEK
 from metrics.min_ade_l1 import MinL1K
 from metrics.min_ade_loss import MinADE_loss
@@ -110,8 +99,6 @@ def initialize_encoder(encoder_type: str, encoder_args: Dict):
     # TODO: Update as we add more encoder types
     encoder_mapping = {
         # 'raster_encoder': RasterEncoder,
-        'polyline_subgraphs': PolylineSubgraphs,
-        'pgp_encoder': PGPEncoder,
         'pgp_encoder_occ': Encoder_occ,
         # 'home_encoder':HomeEncoder,
         'match_encoder':MatchEncoder
@@ -126,10 +113,6 @@ def initialize_aggregator(aggregator_type: str, aggregator_args: Union[Dict, Non
     """
     # TODO: Update as we add more aggregator types
     aggregator_mapping = {
-        'concat': Concat,
-        'global_attention': GlobalAttention,
-        'gc': GoalConditioned,
-        'pgp': PGP,
         'attn_occ': Attention_occ,
         # 'home_agg': HomeAggregator,
         # '2D_sample':Sample2DAggregator,
@@ -149,10 +132,6 @@ def initialize_decoder(decoder_type: str, decoder_args: Dict):
     """
     # TODO: Update as we add more decoder types
     decoder_mapping = {
-        'mtp': MTP,
-        'multipath': Multipath,
-        'covernet': CoverNet,
-        # 'lvm': LVM,
         # 'heatmap':HTMAP,
         # 'home':HomeDecoder,
         # 'ram_decoder':RamDecoder,
@@ -171,8 +150,6 @@ def initialize_metric(metric_type: str, metric_args: Dict = None):
     """
     # TODO: Update as we add more metrics
     metric_mapping = {
-        'mtp_loss': MTPLoss,
-        'covernet_loss': CoverNetLoss,
         'min_ade_k': MinADEK,
         'min_ade_loss': MinADE_loss,
         'min_fde_k': MinFDEK,

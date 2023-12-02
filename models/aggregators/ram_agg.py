@@ -5,7 +5,7 @@ from models.library.blocks import *
 from models.library.RasterSampler import *
 from typing import Dict, Tuple
 from models.encoders.raster_encoder import PositionalEncodingPermute2D
-from return_device import return_device
+from train_eval.utils import return_device
 device = return_device()
 
 class RamAggregator(PredictionAggregator):

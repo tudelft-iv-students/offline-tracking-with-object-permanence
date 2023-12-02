@@ -2,7 +2,7 @@ from skimage.transform import resize
 from typing import Dict
 import torch
 import numpy as np
-from return_device import return_device
+from train_eval.utils import return_device
 device = return_device()
 
 

@@ -29,5 +29,5 @@ with open(args.config, 'r') as yaml_file:
 
 
 # Evaluate
-evaluator = Match_Evaluator(cfg, args.data_root, args.data_dir, args.checkpoint)
+evaluator = Evaluator(cfg, args.data_root, args.data_dir, args.checkpoint)
 evaluator.evaluate(output_dir=args.output_dir)

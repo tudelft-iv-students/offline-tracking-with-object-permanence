@@ -5,7 +5,7 @@ import torch.nn as nn
 from typing import Dict, Union
 from models.library.sampler import TorchModalitySampler
 # from models.decoders.utils import get_probs
-from return_device import return_device
+from train_eval.utils import return_device
 device = return_device()
 
 

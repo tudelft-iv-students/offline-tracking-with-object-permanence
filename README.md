@@ -218,6 +218,7 @@ This project is built upon the following opensourced projects. We sincerely expr
 * [LaneGCN](https://github.com/uber-research/LaneGCN)
 * [LAFormer](https://github.com/mengmengliu1998/LAformer)
 * [CenterPoint](https://github.com/tianweiy/CenterPoint)
+* [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker)
 * [OpenPCDet](https://github.com/open-mmlab/OpenPCDet)
 * [nuScenes-devkit](https://github.com/nutonomy/nuscenes-devkit)
 

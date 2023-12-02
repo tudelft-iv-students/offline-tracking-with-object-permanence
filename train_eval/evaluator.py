@@ -14,8 +14,7 @@ from datasets.nuScenes.nuScenes_graphs_match import match_collate
 from models.library.baselines import *
 
 # Initialize device:
-from return_device import return_device
-device = return_device()
+device = u.return_device()
 
 
 

@@ -2,12 +2,9 @@ from models.encoders.encoder import PredictionEncoder
 import torch
 import torch.nn as nn
 import numpy as np
-# raise NotImplementedError()
 from torchvision.models import resnet18, resnet34, resnet50
-# raise NotImplementedError()
-# from positional_encodings import PositionalEncodingPermute2D
 from models.library.blocks import *
-from return_device import return_device
+from train_eval.utils import return_device
 import itertools
 device = return_device()
 

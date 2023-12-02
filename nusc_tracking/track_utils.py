@@ -1,7 +1,7 @@
 import numpy as np
 from mot_3d.preprocessing.bbox_coarse_hash import BBoxCoarseFilter
 from mot_3d.preprocessing.nms import weird_bbox
-from mot_3d.data_protos import BBox, Validity
+from mot_3d.data_protos import BBox
 from mot_3d import utils
 
 
@@ -17,6 +17,7 @@ def greedy_assignment(dist):
   return np.array(matched_indices, np.int32).reshape(-1, 2)
 
 
+## This NMS function is from Immortal Tracker: https://github.com/Abyssaledge/ImmortalTracker-for-CTRL
 def nms(dets, inst_types, threshold_low=0.1, threshold_high=1.0, threshold_yaw=0.3):
     """ keep the bboxes with overlap <= threshold
     """

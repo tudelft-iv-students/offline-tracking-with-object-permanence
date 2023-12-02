@@ -7,8 +7,7 @@ from torchvision.models import resnet18, resnet34, resnet50
 # raise NotImplementedError()
 # from positional_encodings import PositionalEncodingPermute2D
 from models.library.blocks import Home_temp_enocder,get_track_mask
-from return_device import return_device
-import itertools
+from train_eval.utils import return_device
 device = return_device()
 
 from typing import Dict

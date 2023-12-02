@@ -22,7 +22,7 @@ from scipy.optimize import linear_sum_assignment
 from functools import partial
 from pcdet.utils import common_utils
 import json
-from pcdet.models import load_data_to_gpu
+
 import numpy as np
 import pickle
 os.environ['CUDA_DEVICE_ORDER'] = 'PCI_BUS_ID'
