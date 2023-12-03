@@ -831,7 +831,7 @@ if __name__ == '__main__':
     parser.add_argument('--verbose', type=bool, default= True)
     parser.add_argument('--output_dir', type=str, default= None)
     parser.add_argument('--version', type=str, default= None)
-    parser.add_argument('--skip_compute_stats', action= 'store_false')
+    parser.add_argument('--skip_compute_stats', action= 'store_true')
     args = parser.parse_args()
     args.data_dir=os.path.join(args.data_dir,args.tracker_name)
 
@@ -849,7 +849,7 @@ if __name__ == '__main__':
         val_scenes = splits.mini_val
     
     nusc = NuScenes(version=version, dataroot=args.data_root, verbose=True)
-    if args.skip_compute_stats:
+    if not args.skip_compute_stats:
         print("Computing Stats ...")
         compute_dataset = Track_completion_EXT(args.result_path,nusc=nusc,dataset_cfg=dataset_cfg,data_dir=args.data_dir,mode='compute_stats',output_dir=args.output_dir )
         compute_dl=torch_data.DataLoader(compute_dataset, args.batch_size, shuffle=False,
