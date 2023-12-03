@@ -18,7 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('--cfg_file', type=str, default=None, help='specify the config of dataset')
     parser.add_argument('--func', type=str, default='extract_data', help='')
     parser.add_argument('--version', type=str, default='v1.0-trainval', help='')
-    parser.add_argument('--result_path', type=str, default='mot_results/v1.0-test/tracking_result.json', help='')
+    parser.add_argument('--result_path', type=str, default='mot_results/CenterPoint/v1.0-trainval/tracking_result.json', help='')
     parser.add_argument('--tracker_name', type=str, default='CenterPoint', help='tracker name')
     parser.add_argument('--data_root', type=str, required=True, help='nuscenes dataroot')
     args = parser.parse_args()
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         extract_data(
             version=args.version,
             data_path=args.data_root,
-            save_path=(Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/args.tracker_name,
+            save_path=(Path(__file__).resolve().parent.parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/args.tracker_name,
             max_sweeps=dataset_cfg.MAX_SWEEPS,
             result_path=args.result_path,
             cfg=cfg_

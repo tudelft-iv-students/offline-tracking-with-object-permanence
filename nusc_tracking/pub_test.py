@@ -12,6 +12,7 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+from pathlib import Path
 import sys 
 import json
 import numpy as np
@@ -102,9 +103,9 @@ def save_first_frame():
 
     del nusc
 
-    res_dir = os.path.join(args.work_dir,args.version)
+    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
     if not os.path.exists(res_dir):
-        os.makedirs(res_dir)
+        Path( res_dir ).mkdir( parents=True )
     
     with open(os.path.join(res_dir, 'frames_meta.json'), "w") as f:
         json.dump({'frames': frames}, f)
@@ -113,7 +114,7 @@ def save_first_frame():
 def main():
     args = parse_args()
     print('Deploy OK')
-    res_dir = os.path.join(args.work_dir,args.version)
+    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
     tracker = Tracker(max_age=args.max_age, hungarian=args.hungarian)
 
     with open(args.checkpoint, 'rb') as f:
@@ -191,9 +192,9 @@ def main():
         "use_external": False,
     }
 
-    res_dir = os.path.join(args.work_dir,args.version)
+    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
     if not os.path.exists(res_dir):
-        os.makedirs(res_dir)
+        Path( res_dir ).mkdir( parents=True )
 
     with open(os.path.join(res_dir, 'tracking_result.json'), "w") as f:
         json.dump(nusc_annos, f)

@@ -1,8 +1,8 @@
 import numpy as np
-from mot_3d.preprocessing.bbox_coarse_hash import BBoxCoarseFilter
-from mot_3d.preprocessing.nms import weird_bbox
-from mot_3d.data_protos import BBox
-from mot_3d import utils
+from nusc_tracking.mot_3d.preprocessing.bbox_coarse_hash import BBoxCoarseFilter
+from nusc_tracking.mot_3d.preprocessing.nms import weird_bbox
+from nusc_tracking.mot_3d.data_protos import BBox
+from nusc_tracking.mot_3d import utils
 
 
 def greedy_assignment(dist):

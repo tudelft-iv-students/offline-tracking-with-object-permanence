@@ -14,7 +14,7 @@ def get_track_mask(agent_representation):
     tracks=agent_representation.view(-1,agent_representation.shape[-2],agent_representation.shape[-1])[:,:,-1]
     return (tracks.sum(dim=-1)>0)
 
-
+### From [PGP](https://github.com/nachiket92/PGP)
 class GAT(nn.Module):
     """
     GAT layer for aggregating local context at each lane node. Uses scaled dot product attention using pytorch's
@@ -126,7 +126,7 @@ class Res1d(nn.Module):
             out = self.relu(out)
         return out
 
-
+## From [TNT-VectorNet-and-HOME-Trajectory-Forecasting](https://github.com/Robotmurlock/TNT-VectorNet-and-HOME-Trajectory-Forecasting)
 class CNNBlock(nn.Module):
     def __init__(
         self,
@@ -294,7 +294,7 @@ class AddCoords(nn.Module):
 
         return ret
 
-
+## From CoordConv(https://github.com/uber-research/CoordConv/tree/27fab8b86efac87c262c7c596a0c384b83c9d806)
 class CoordConv(nn.Module):
 
     def __init__(self, in_channels, out_channels, with_r=False, **kwargs):
@@ -333,7 +333,9 @@ class Linear(nn.Module):
         if self.act:
             out = self.relu(out)
         return out
-    
+
+
+### From [LAFormer](https://github.com/mengmengliu1998/LAformer)
 class GlobalGraph(nn.Module):
     r"""
     Global graph
@@ -399,7 +401,8 @@ class GlobalGraph(nn.Module):
             assert len(attention_probs.shape) == 3
             return context_layer, attention_probs
         return context_layer
-    
+
+### From [LaneGCN](https://github.com/uber-research/LaneGCN)
 class Att(nn.Module):
     """
     Attention block to pass context nodes information to target nodes
@@ -494,6 +497,7 @@ class Att(nn.Module):
         agts = self.relu(agts)
         return agts
 
+## From [PGP](https://github.com/nachiket92/PGP)
 def node_gru_enc(masks: Tensor,node_embedding: Tensor, gru: nn.GRU):
     masks_for_batching = ~masks[:, :, :, 0].bool()
     masks_for_batching = masks_for_batching.any(dim=-1).unsqueeze(2).unsqueeze(3)

@@ -26,22 +26,35 @@ We benchmarked our Re-ID result on the nuScenes test split. The result is shown 
 | [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker) |   70.5   |   0.609  | 66511 | 12133 | 14758 | $\mathbf{155}$ |
 | Offline Re-ID |   $\mathbf{73.4}$   |   $\mathbf{0.532}$  | 66644 | $\mathbf{11418}$ | 14576 | 204 |
 
+Table1: Re-ID evaluation on the nuScenes test split using CenterPoint detections. 
 </p>
 
 By the time of submission, the model ranks <mark>5<sup>th</sup></mark> among lidar-based methods and <mark>2<sup>nd</sup></mark> among methods using CenterPoint detections (we only compare vehicle classes).
 
 ### Track completion result
-We show the quantitative results on the validation split over the vehicle classes. We modified the evaluation protocol so that occluded GT boxes are not filtered.
+We show the quantitative results on the validation split over the vehicle classes. We modified the evaluation protocol so that occluded GT boxes are not filtered. We have applied our offline tracking model to multiple SOTA trackers and show the relative improvements it brings by recovering occlusions.
 
 > The track completion model theoretically interpolates non-linear trajectories between fragmented tracklets. However, the standard nuScenes evaluation first filters out the occluded GT boxes then linearly interpolates the occluded trajectories. Therefore, we modified the standard evaluation protocol and evaluate the track completion result locally on the validation split so that occluded GT boxes are retained for evaluation. Note that our models are trained and tuned on the train split. Similarly, we still focus on vehicle tracks.
 
 <p align="middle">
 
-|   Track Completion Result on Val Split    | AMOTA (%) $\uparrow$|    TP $\uparrow$ |   FP $\downarrow$ |   FN $\downarrow$ | 
+| Metrics | AMOTA $\uparrow$ | AMOTA $\uparrow$ | AMOTP $\downarrow / \mathbf{m}$ | AMOTP $\downarrow / \mathbf{m}$ | IDS $\downarrow$ | IDS $\downarrow$ | Recall $\uparrow$ | Recall $\uparrow$ |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Occlusion Recovery | w/o | w | w/o | w | w/o | w | w/o | w |
+| [CenterPoint](https://github.com/tianweiy/CenterPoint) | 70.2 | $\mathbf{7 2 . 4}$ | 0.634 | $\mathbf{0 . 6 1 5}$ | 254 | $\mathbf{1 8 3}$ | 73.7 | $\mathbf{7 4 . 5}$ |
+| [SimpleTrack](https://github.com/tusen-ai/SimpleTrack) | 70.0 | $\mathbf{7 1 . 0}$ | 0.668 | $\mathbf{0 . 6 2 9}$ | 210 | $\mathbf{1 7 0}$ | 72.5 | $\mathbf{7 2 . 9}$ |
+| [VoxelNet](https://github.com/dvlab-research/VoxelNeXt) | 69.6 | $\mathbf{7 0 . 6}$ | 0.710 | $\mathbf{0 . 6 6 5}$ | 308 | $\mathbf{2 3 0}$ | 72.8 | $\mathbf{7 2 . 9}$ |
+| [ShaSTA](https://github.com/tsadja/ShaSTA) | 72.0 | $\mathbf{7 2 . 6}$ | 0.612 | $\mathbf{0 . 5 9 3}$ | 203 | $\mathbf{1 7 4}$ | 73.0 | $\mathbf{7 5 . 3}$ |
+
+Table2: Joint evaluation on the nuScenes validation split (occludded boxes are not filtered). $\textbf{w}$: with offline Re-ID and track completion. $\textbf{w/o}$: original results without any refinement.
+
+<!-- |   Track Completion Result on Val Split    | AMOTA (%) $\uparrow$|    TP $\uparrow$ |   FP $\downarrow$ |   FN $\downarrow$ | 
 |:-------------------------------:|:--------:|:-----:|:-----:|:-----:|
 | [CenterPoint](https://github.com/tianweiy/CenterPoint) | 70.2 | 59332 | $\mathbf{8 1 9 7}$ | 14704 |
 | [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker) | 72.3 | 59271 | 9593 | 14883 |
 | Offline Track Completion |   $\mathbf{72.4}$   |  $\mathbf{60675}$ | 8953 | $\mathbf{13432}$ | 
+
+Table3: Joint evaluation using CenterPoint detection and tracking on the nuScenes validation split. -->
 
 </p>
 
@@ -131,24 +144,24 @@ python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_result
 ### Extract vehicle tracklets and convert to input format for Re-ID
 3. Extract vehicle tracklets
 ```
-python initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory
+python executables/initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory --tracker_name <tracker_used>
 ``` 
 4. Convert to Re-ID input, this may take several hours (TODO: add multiprocessing to make the extraction faster)
 ```
 ## Slower
-#python nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --data_root path/to/nuScenes/root/directory
+#python executables/nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --data_root path/to/nuScenes/root/directory --tracker_name
 ## OR a faster way, but more requires computational resources 
-bash Re-ID_extraction.sh path/to/nuScenes/root/directory
+bash executables/Re-ID_extraction.sh path/to/nuScenes/root/directory tracker_name
 ```
 ### Performing Re-ID
 5. Reassociate history tracklets with future tracklets by changing the tracking ID of the future tracklets. The following command will generate the Re-ID result as a **.json** file, which can be evaluated directly using the standard evaluation code of nuScenes MOT.
 ```
-python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory
+python executables/motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory
 ```
 
 6. To visualize all the association result, run
 ```
-python motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --visualize --data_root path/to/nuScenes/root/directory
+python executables/motion_matching.py --cfg_file motion_associator/re-association.yaml --result_path mot_results/v1.0-test/tracking_result.json --visualize --data_root path/to/nuScenes/root/directory
 ```
 The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-test/plots`. Note that some times the detections are flipped for 180 degrees. 
 <p align="center">
@@ -166,14 +179,14 @@ The plots will be stored under `./mot_results/Re-ID_results/matching_info/v1.0-t
 Complete the fragmented tracks by interpolating them. To change the split version, please change the cfg file `track_completion_model/track_completion.yaml`. First extract the data from the previous Re-ID results
 
 ```
-python track_completion_ext.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --data_root path/to/nuScenes/root/directory
+python executables/track_completion_ext.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --data_root path/to/nuScenes/root/directory
 ```
 where `mot_results/Re-ID_results/path/to/the/RE-ID/results.json` is the path to Re-ID result.
 
 Finally, perform track completioin over the Re-ID results. It will produce the final tracking reult under `mot_results/track_completion_results`.
 
 ```
-python track_completion.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --ckpt_path track_completion_model/trained_completion_model.tar --data_root path/to/nuScenes/root/directory
+python executables/track_completion.py --result_path mot_results/Re-ID_results/path/to/the/Re-ID/results.json --ckpt_path track_completion_model/trained_completion_model.tar --data_root path/to/nuScenes/root/directory
 ```
 
 ## Training
@@ -182,27 +195,27 @@ We have already provided the trained Re-ID models under folder `./motion_associa
 1. Run the following commands to extract pre-processed data for Re-ID. This may take several hours. 
 ```shell
 ## Preprocess Re-ID data for training
-python preprocess.py -c configs/preprocess_match_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data
+python executables/preprocess.py -c configs/preprocess_match_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data
 ```
 
 2. Run the following commands to extract pre-processed data for track completion. 
 ```shell
  ## Preprocess track completion data for training
-python preprocess.py -c configs/preprocess_track_completion_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data
+python executables/preprocess.py -c configs/preprocess_track_completion_data.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data
 ```
 
 
 3. To train the Re-ID models from scratch, run
 ```shell
 ### Train map branch
-python train.py -c configs/match_train_augment.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/map_branch -n 50
+python executables/train.py -c configs/match_train_augment.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/map_branch -n 50
 ### Train motion branch (Optional)
-python train.py -c configs/configs/match_train_augment_only_motion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/motion_branch -n 50
+python executables/train.py -c configs/configs/match_train_augment_only_motion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/Re-ID/data -o motion_associator/motion_branch -n 50
 ```
 
 4. To train the track completion model from scratch, run
 ```shell
-python train.py -c configs/track_completion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data -o track_completion_model/ -n 50
+python executables/train.py -c configs/track_completion.yml -r path/to/nuScenes/root/directory -d path/to/directory/with/preprocessed/track_completion/data -o track_completion_model/ -n 50
 ```
 
 5. The training script will save training checkpoints and tensorboard logs in the output directory. To launch tensorboard, run

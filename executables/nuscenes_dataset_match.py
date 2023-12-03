@@ -108,10 +108,10 @@ class NuScenesDataset_MATCH_EXT(torch_data.Dataset):
                 dataset_cfg.VERSION = dataset_cfg.version
             except:
                 raise Exception('Specify version!')
-        self.save_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data' / 'final_version_nms'/ tracker_name/dataset_cfg.VERSION / class_name
+        self.save_path = (Path(__file__).resolve().parent.parent ).resolve() / 'extracted_mot_data' / 'final_version_nms'/ tracker_name/dataset_cfg.VERSION / class_name
         if not os.path.isdir(self.save_path):
             os.mkdir(self.save_path)
-        self.info_path = (Path(__file__).resolve().parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/ tracker_name/dataset_cfg.VERSION
+        self.info_path = (Path(__file__).resolve().parent.parent ).resolve() / 'extracted_mot_data'/'final_version_nms'/ tracker_name/dataset_cfg.VERSION
         self.dataset_cfg=dataset_cfg
         self.version=dataset_cfg.VERSION
         self.logger = logger
@@ -811,7 +811,6 @@ if __name__ == '__main__':
     #             root_path=ROOT_DIR / 'data' / 'nuscenes',
     #             logger=create_logger(),helper=helper,mode='add_time_diff'
     #         ))
-    # raise NotImplementedError()
     if args.type is None:
         class_names=[
                     'car',

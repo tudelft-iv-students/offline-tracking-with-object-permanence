@@ -164,4 +164,5 @@ slurm*
 *.pkl
 mot_results/*
 */token_id_lists.txt
-extrated_track_completion_data/
+extracted_track_completion_data/
+extracted_mot_data/
