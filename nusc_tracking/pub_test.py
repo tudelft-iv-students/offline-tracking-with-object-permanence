@@ -32,8 +32,6 @@ from pyquaternion import Quaternion
 from nuscenes.utils.data_classes import Box
 from mot_3d.data_protos import BBox, Validity
 import numpy as np
-
-
 from track_utils import nms
 
 def nu_array2mot_bbox(b):
@@ -61,7 +59,8 @@ def parse_args():
     parser.add_argument("--root", help="the dir to nusc data ", type=str, required=True)
     parser.add_argument("--version", type=str, default='v1.0-trainval')
     parser.add_argument("--max_age", type=int, default=3)
-    parser.add_argument("--nms", action='store_true')
+    parser.add_argument("--single_process_nms", action='store_true')
+    parser.add_argument("--num_processes", type=int, default=8)
     parser.add_argument("--nms_thresh", type=int, default=0.1)
 
     args = parser.parse_args()
@@ -103,7 +102,7 @@ def save_first_frame():
 
     del nusc
 
-    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
+    res_dir = os.path.join(args.work_dir,"CenterPoint",args.version)
     if not os.path.exists(res_dir):
         Path( res_dir ).mkdir( parents=True )
     
@@ -111,10 +110,35 @@ def save_first_frame():
         json.dump({'frames': frames}, f)
 
 
+def process_frame(idx, frames, predictions):
+    token = frames[idx]['token']
+    preds = predictions[token]
+    print(f" {idx/len(frames)*100:.2f}%")
+    # print(f" Before",len(preds))
+    dets = [nu_array2mot_bbox(b) for b in preds]
+    inst_types = [b['detection_name'] for b in preds]
+    frame_indexes, obj_types = nms(dets, inst_types, 0.1)
+
+    preds_nms = [preds[i] for i in frame_indexes]
+    return token, preds_nms
+
+def multi_process_nms(frames, predictions,num_processes=8):
+    from multiprocessing import Pool
+
+    pool = Pool(processes=num_processes) # Adjust the number of processes as per your CPU
+
+    results = pool.starmap(process_frame, [(idx, frames, predictions) for idx in range(len(frames))])
+
+    pool.close()
+    pool.join()
+
+    ret={res[0]:res[1] for res in results}
+    return ret
+    
 def main():
     args = parse_args()
     print('Deploy OK')
-    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
+    res_dir = os.path.join(args.work_dir,"CenterPoint",args.version)
     tracker = Tracker(max_age=args.max_age, hungarian=args.hungarian)
 
     with open(args.checkpoint, 'rb') as f:
@@ -128,7 +152,11 @@ def main():
         "meta": None,
     }
     size = len(frames)
-
+    
+    if not args.single_process_nms:
+        print("Begin Multiprocess NMS\n")
+        predictions = multi_process_nms(frames, predictions,num_processes=args.num_processes)
+        print("End Multiprocess NMS\n")
     print("Begin Tracking\n")
     start = time.time()
     for i in range(size):
@@ -148,15 +176,16 @@ def main():
         
 
         # aux_info = list(range(len(dets)))
-
-        print("Before",len(preds))
-        if args.nms:
+        
+        if args.single_process_nms:
+            print("Before",len(preds))
             dets = [nu_array2mot_bbox(b) for b in preds]
             inst_types = [b['detection_name'] for b in preds]
             frame_indexes,obj_types = nms(dets, inst_types, args.nms_thresh)
 
-        preds=[preds[i] for i in frame_indexes] 
-        print("After",len(preds))
+            preds=[preds[i] for i in frame_indexes] 
+            print("After",len(preds))
+            
         outputs = tracker.step_centertrack(preds, time_lag)
         annos = []
 
@@ -192,7 +221,7 @@ def main():
         "use_external": False,
     }
 
-    res_dir = os.path.join(args.work_dir,args.version,"CenterPoint")
+    res_dir = os.path.join(args.work_dir,"CenterPoint",args.version)
     if not os.path.exists(res_dir):
         Path( res_dir ).mkdir( parents=True )
 

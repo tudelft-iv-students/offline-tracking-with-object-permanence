@@ -137,9 +137,9 @@ conda install pytorch==1.7.1 torchvision==0.8.2 torchaudio==0.7.2 cudatoolkit=10
 
 ### Generating the initial online tracking result
 1. Download the [detection results](https://mitprod-my.sharepoint.com/:f:/g/personal/tianweiy_mit_edu/Eip_tOTYSk5JhdVtVzlXlyABDPnGx9vsnwdo5SRK7bsh8w?e=vSdija) in standard nuScenes submission format. (Note: the link is from [CenterPoint](https://github.com/tianweiy/CenterPoint). Any other detectors will also work as long as it fits the format.) The detection results can be saved in `./det_results/`.
-2. Run the tracking script (TODO: add multiprocessing to make the nms faster)
+2. Run the tracking script 
 ```shell
-python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --nms --version v1.0-test --root path/to/nuScenes/root/directory
+python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_results/your_detection_result(json file) --version v1.0-trainval --root path/to/nuScenes/root/directory
 ```
 ### Extract vehicle tracklets and convert to input format for Re-ID
 3. Extract vehicle tracklets
