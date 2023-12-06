@@ -146,7 +146,7 @@ python nusc_tracking/pub_test.py --work_dir mot_results  --checkpoint det_result
 ```
 python executables/initial_extraction.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --version v1.0-test  --result_path mot_results/v1.0-test/tracking_result.json --data_root path/to/nuScenes/root/directory --tracker_name <tracker_used>
 ``` 
-4. Convert to Re-ID input, this may take several hours (TODO: add multiprocessing to make the extraction faster)
+4. Convert to Re-ID input, this may take several hours 
 ```
 ## Slower
 #python executables/nuscenes_dataset_match.py --cfg_file data_extraction/nuscenes_dataset_occ.yaml --data_root path/to/nuScenes/root/directory --tracker_name
