@@ -31,8 +31,8 @@ def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True
     if compute_stats:
         train_set = initialize_dataset(ds_type, ['compute_stats', data_dir, cfg['train_set_args']] + specific_args)
         val_set = initialize_dataset(ds_type, ['compute_stats', data_dir, cfg['val_set_args']] + specific_args)
-        test_set = initialize_dataset(ds_type, ['compute_stats', data_dir, cfg['test_set_args']] + specific_args)
-        compute_dataset_stats([train_set, val_set, test_set], cfg['batch_size'], cfg['num_workers'],
+        # test_set = initialize_dataset(ds_type, ['compute_stats', data_dir, cfg['test_set_args']] + specific_args)
+        compute_dataset_stats([train_set, val_set], cfg['batch_size'], cfg['num_workers'],
                               verbose=cfg['verbosity'])
         # compute_dataset_stats([ test_set], cfg['batch_size'], cfg['num_workers'],
         #                       verbose=cfg['verbosity'])
@@ -42,7 +42,7 @@ def preprocess_data(cfg: Dict, data_root: str, data_dir: str, compute_stats=True
         train_set = initialize_dataset(ds_type, ['extract_data', data_dir, cfg['train_set_args']] + specific_args)
         val_set = initialize_dataset(ds_type, ['extract_data', data_dir, cfg['val_set_args']] + specific_args)
         test_set = initialize_dataset(ds_type, ['extract_data', data_dir, cfg['test_set_args']] + specific_args)
-        extract_data([train_set, val_set, test_set], cfg['batch_size'], cfg['num_workers'], verbose=cfg['verbosity'])
+        extract_data([train_set, val_set], cfg['batch_size'], cfg['num_workers'], verbose=cfg['verbosity'])
         # extract_data([test_set], cfg['batch_size'], cfg['num_workers'], verbose=cfg['verbosity'])
 
 

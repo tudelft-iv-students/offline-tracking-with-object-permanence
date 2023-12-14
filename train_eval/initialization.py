@@ -5,7 +5,6 @@ from datasets.nuScenes.prediction import PredictHelper_occ
 from datasets.interface import TrajectoryDataset
 from datasets.nuScenes.nuScenes_raster import NuScenesRaster
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
-from datasets.nuScenes.nuScenes_graphs import NuScenesGraphs
 from datasets.nuScenes.nuScenes_graphs_occ_v2 import NuScenesGraphs_OCC
 from datasets.nuScenes.nuScenes_graphs_match import NuScenesGraphs_MATCH
 
@@ -33,7 +32,6 @@ from metrics.min_ade_l1 import MinL1K
 from metrics.min_ade_loss import MinADE_loss
 from metrics.min_fde import MinFDEK
 from metrics.miss_rate import MissRateK
-from metrics.covernet_loss import CoverNetLoss
 from metrics.focal_loss import FocalLoss
 from metrics.l1_loss import L1_loss
 from metrics.huber import Huber
@@ -54,7 +52,6 @@ def initialize_dataset(dataset_type: str, args: List) -> TrajectoryDataset:
     # TODO: Add more datasets as implemented
     dataset_classes = {'nuScenes_single_agent_raster': NuScenesRaster,
                        'nuScenes_single_agent_vector': NuScenesVector,
-                       'nuScenes_single_agent_graphs': NuScenesGraphs,
                        'nuScenes_single_agent_graphs_occ': NuScenesGraphs_OCC,
                        'nuScenes_single_agent_match': NuScenesGraphs_MATCH
                        }

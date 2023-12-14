@@ -1,0 +1,60 @@
+dataset: 'nuScenes'
+version: 'v1.0-trainval'
+agent_setting: 'single_agent'
+input_representation: 'graphs_occ'
+helper: 'occ'
+
+train_set_args:
+  split: 'train'
+  t_h: 2.5
+  t_f: 18.5
+  split_name: 'train'
+  match: False
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  augment: True
+  augment_min: 1.5
+  random_tf: True
+  dep_thresh: 12
+  dep_percent: 0.75
+  traj_mask_prob: 0.2
+  use_mid_origin: True
+  random_rots: True
+  rdm_rot_prob: 0.75
+  adjust_yaw: True
+  add_static_training_samples: True
+  target: 'no_ann'
+
+
+val_set_args:
+  split: 'train'
+  t_h: 2.5
+  t_f: 18.5
+  split_name: 'val'
+  match: False
+  use_home: False
+  use_raster: False
+  map_extent: [-150, 150, -20, 320]
+  polyline_resolution: 1
+  polyline_length: 20
+  traversal_horizon: 15
+  augment: True
+  augment_min: 1.5
+  random_tf: True
+  dep_thresh: 9
+  dep_percent: 0.75
+  traj_mask_prob: 0.2
+  use_mid_origin: True
+  random_rots: False
+  adjust_yaw: True
+  add_static_training_samples: False
+  target: 'no_point'
+
+
+batch_size: 64
+num_workers: 12
+verbosity: True
