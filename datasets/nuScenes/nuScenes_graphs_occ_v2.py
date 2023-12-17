@@ -251,9 +251,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
         endpoint_time=time_offset
         if self.target == 'no_point':
             if not (len(coords_fut)>missing_length):
-                print("time offset", time_offset)
-                print("len(coords_fut): ",len(coords_fut))
-                print("missing_length: ",missing_length)
+                # print("time offset", time_offset)
+                # print("len(coords_fut): ",len(coords_fut))
+                # print("missing_length: ",missing_length)
                 raise Exception("future data is short")
             for xy,r,t in zip(coords_fut[missing_length:],global_yaw_fut[missing_length:],time_fut[missing_length:]):
                 if count==0:
@@ -299,21 +299,27 @@ class NuScenesGraphs_OCC(NuScenesVector):
             return max(map_radius,25),origin
 
         # x, y co-ordinates in agent's frame of reference
-        coords,global_yaw,time_past = self.helper.get_past_for_agent(i_t, s_t, seconds=self.t_h, in_agent_frame=False,add_yaw_and_time=True)
-        global_pose=global_pose[:-1].__add__((yaw,))
-        local_pose=self.global_to_local(origin, global_pose)
-        local_yaw=local_pose[-1]
-        past_hist=np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
-        concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0,0))])
-        count=0
-        for xy,r,t in zip(coords,global_yaw,time_past):
-            glb_yaw=quaternion_yaw(Quaternion(r))
-            local_pose = self.global_to_local(origin, (xy[0], xy[1], glb_yaw))
+        try:
+            coords,global_yaw,time_past = self.helper.get_past_for_agent(i_t, s_t, seconds=self.t_h, in_agent_frame=False,add_yaw_and_time=True)
+            global_pose=global_pose[:-1].__add__((yaw,))
+            local_pose=self.global_to_local(origin, global_pose)
             local_yaw=local_pose[-1]
-            past_hist=np.concatenate((past_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t))])),0)
-            concat_hist=np.concatenate((concat_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t,0))])),0)
-            count+=1
-        # Zero pad for track histories shorter than t_h
+            past_hist=np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
+            concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0,0))])
+            count=0
+            for xy,r,t in zip(coords,global_yaw,time_past):
+                glb_yaw=quaternion_yaw(Quaternion(r))
+                local_pose = self.global_to_local(origin, (xy[0], xy[1], glb_yaw))
+                local_yaw=local_pose[-1]
+                past_hist=np.concatenate((past_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t))])),0)
+                concat_hist=np.concatenate((concat_hist,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),-t,0))])),0)
+                count+=1
+        except:
+            global_pose=global_pose[:-1].__add__((yaw,))
+            local_pose=self.global_to_local(origin, global_pose)
+            local_yaw=local_pose[-1]
+            past_hist=np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),0))])
+            concat_hist=np.asarray([self.global_to_local(origin, global_pose).__add__((np.cos(local_yaw),np.sin(local_yaw),0,0))])
         hist=past_hist[::-1]
         
         concat_motion=np.concatenate((concat_hist[::-1],concat_future),axis=0)        
@@ -331,9 +337,9 @@ class NuScenesGraphs_OCC(NuScenesVector):
                 gt_poses= np.concatenate((gt_poses,local_pose),0)
                 time_query=np.concatenate((np.array([[t,t/endpoint_time]]),time_query),0)
             dummy_vals=np.ones([len(time_query),6])*np.inf
-            print(missing_length)
-            print(len(time_query))
-            print(time_fut.shape)
+            # print(missing_length)
+            # print(len(time_query))
+            # print(time_fut.shape)
             dummy_vals[:,-1]=time_fut[:missing_length]
         elif self.target == 'no_ann':
             missing_frames=token_dict["missing_frames"]
