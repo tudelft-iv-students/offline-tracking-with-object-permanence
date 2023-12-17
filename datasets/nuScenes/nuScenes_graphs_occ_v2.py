@@ -66,6 +66,8 @@ class NuScenesGraphs_OCC(NuScenesVector):
         self.target = args['target']
         self.use_mid_origin=True
         self.adjust_yaw=True
+        self.augment=False
+        self.random_rots=False
         self.load_tokens()
 
 
@@ -241,18 +243,18 @@ class NuScenesGraphs_OCC(NuScenesVector):
         start_sample = self.helper.data.get('sample',start["sample_token"])
         end_sample = self.helper.data.get('sample',s_t)
         time_offset=(end_sample['timestamp'] - start_sample['timestamp'])/1e6
-        print("time",time_offset)
+
         coords_fut,global_yaw_fut,time_fut = self.helper.get_future_for_agent(start["ins_token"],start["sample_token"], seconds=time_offset+self.t_h, in_agent_frame=False,add_yaw_and_time=True)
         future_rec=np.empty([0,6])
         concat_future=np.empty([0,7])
         count=0
         endpoint_time=time_offset
         if self.target == 'no_point':
-            try:
-                assert(len(coords_fut)>missing_length)
-            except:
+            if not (len(coords_fut)>missing_length):
+                print("time offset", time_offset)
                 print("len(coords_fut): ",len(coords_fut))
                 print("missing_length: ",missing_length)
+                raise Exception("future data is short")
             for xy,r,t in zip(coords_fut[missing_length:],global_yaw_fut[missing_length:],time_fut[missing_length:]):
                 if count==0:
                     origin_fut=(xy[0], xy[1], correct_yaw(quaternion_yaw(Quaternion(r))))
@@ -328,14 +330,25 @@ class NuScenesGraphs_OCC(NuScenesVector):
                 local_pose = np.asarray([self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))])
                 gt_poses= np.concatenate((gt_poses,local_pose),0)
                 time_query=np.concatenate((np.array([[t,t/endpoint_time]]),time_query),0)
+            dummy_vals=np.ones([len(time_query),6])*np.inf
+            print(missing_length)
+            print(len(time_query))
+            print(time_fut.shape)
+            dummy_vals[:,-1]=time_fut[:missing_length]
         elif self.target == 'no_ann':
             missing_frames=token_dict["missing_frames"]
+            assert(len(missing_frames)==missing_length)
             for s_t in missing_frames:
                 frame=self.helper.data.get('sample',s_t)
+                t=(frame['timestamp'] - start_sample['timestamp'])/1e6
                 time_query=np.concatenate((np.array([[t,t/endpoint_time]]),time_query),0)
+            assert(len(time_query)==missing_length)
+            dummy_vals=np.ones([len(time_query),6])*np.inf
+            print(missing_length)
+            print(len(time_query))
+            print(time_fut.shape)
+            dummy_vals[:,-1]=time_query[:,0]
 
-        dummy_vals=np.ones([len(time_query),6])*np.inf
-        dummy_vals[:,-1]=time_fut[:missing_length]
         concat_refine_input=np.concatenate((past_hist[::-1],dummy_vals,future_rec),axis=0)
 
         time_query, time_query_masks = self.list_to_tensor([time_query], 1, int((self.t_f) * 2 + 1), 2,False)
