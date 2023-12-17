@@ -116,7 +116,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
             hist, hist_masks = self.list_to_tensor([history], 1, int(self.t_h * 2 + 1), 6,False)
             future, future_masks = self.list_to_tensor([future], 1, int(self.t_h * 2 + 1), 6,False)
             concat_motion, concat_masks = self.list_to_tensor([concat_motion], 1, int(self.t_h * 2 + 1)*2, 7,False)
-            concat_refine_input, concat_refine_mask = self.list_to_tensor([refine_input], 1, 40, 6,False)
+            concat_refine_input, concat_refine_mask = self.list_to_tensor([refine_input], 1, 1+int((self.t_f-self.t_h) * 2 + 1)+int(self.t_h * 2 + 1)*2, 6,False)
             
             reversed_query = inputs['target_agent_representation']['time_query']['query'].copy()
             temp_mask = (1-inputs['target_agent_representation']['time_query']['mask'][:,0]).astype(np.bool)
@@ -350,16 +350,16 @@ class NuScenesGraphs_OCC(NuScenesVector):
                 time_query=np.concatenate((np.array([[t,t/endpoint_time]]),time_query),0)
             assert(len(time_query)==missing_length)
             dummy_vals=np.ones([len(time_query),6])*np.inf
-            print(missing_length)
-            print(len(time_query))
-            print(time_fut.shape)
+            # print(missing_length)
+            # print(len(time_query))
+            # print(time_fut.shape)
             dummy_vals[:,-1]=time_query[:,0]
 
         concat_refine_input=np.concatenate((past_hist[::-1],dummy_vals,future_rec),axis=0)
 
         time_query, time_query_masks = self.list_to_tensor([time_query], 1, int((self.t_f) * 2 + 1), 2,False)
         query={'query':np.squeeze(time_query,0),'mask':np.squeeze(time_query_masks,0),'endpoints':endpts_query}
-        gt_poses, gt_poses_masks = self.list_to_tensor([gt_poses], 1, 40, 3,False)
+        gt_poses, gt_poses_masks = self.list_to_tensor([gt_poses], 1, int((self.t_f) * 2 + 1), 3,False)
         # concat_refine_input, concat_refine_mask = self.list_to_tensor(concat_refine_input, 1, 
         #                                                             int((self.t_f) * 2 + 1)+int(self.t_h * 2 + 1)*2, 6,False)
         # gt_rev, _ = self.list_to_tensor([gt_rev], 1, int((self.t_f-2) * 2 + 1), 3,False)

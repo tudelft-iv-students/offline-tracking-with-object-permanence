@@ -11,11 +11,7 @@ class ADE(Metric):
     def __init__(self, args: Dict):
         self.name = 'ade_' +args['target']
         self.target = args['target']
-        if 'add_quadratic' in args:
-            if args['add_quadratic'] ==True:
-                self.add_quadratic=True
-        else:
-            self.add_quadratic=False
+        self.add_quadratic=False
 
     def compute(self, predictions: Dict, ground_truth: Union[Dict, torch.Tensor]) -> torch.Tensor:
         """

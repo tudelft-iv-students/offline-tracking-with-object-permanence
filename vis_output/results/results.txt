@@ -1,0 +1,6 @@
+ade_initial: 4.0638
+yaw_initial: 0.0755
+MR_initial: 0.6601
+ade_refine: 4.0603
+yaw_refine: 0.0775
+MR_refine: 0.6584
