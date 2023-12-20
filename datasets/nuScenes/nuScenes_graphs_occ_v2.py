@@ -267,7 +267,6 @@ class NuScenesGraphs_OCC(NuScenesVector):
                                 
                         origin=tuple(origin)   
                         origin_fut=origin
-                t+=time_offset
                 local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
                 local_yaw = local_pose[-1]
                 future_rec=np.concatenate((future_rec,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),t))])),0)
@@ -286,7 +285,6 @@ class NuScenesGraphs_OCC(NuScenesVector):
                                 
                         origin=tuple(origin)   
                         origin_fut=origin
-                t+=time_offset
                 local_pose = self.global_to_local(origin, (xy[0], xy[1], quaternion_yaw(Quaternion(r))))
                 local_yaw = local_pose[-1]
                 future_rec=np.concatenate((future_rec,np.asarray([local_pose.__add__((np.cos(local_yaw),np.sin(local_yaw),t))])),0)
@@ -294,12 +292,18 @@ class NuScenesGraphs_OCC(NuScenesVector):
                 count+=1
             
         future=future_rec[::-1]
-        map_radius = LA.norm(future_rec[-1,:2],ord=2)
+        try:
+            map_radius = LA.norm(future_rec[-1,:2],ord=2)
+        except:
+            print(missing_length)
+            print(time_fut)
+            raise Exception("Target",self.target)
         if self.mode == "compute_stats":
             return max(map_radius,25),origin
 
         # x, y co-ordinates in agent's frame of reference
         try:
+            i_t, s_t=start["ins_token"],start["sample_token"]
             coords,global_yaw,time_past = self.helper.get_past_for_agent(i_t, s_t, seconds=self.t_h, in_agent_frame=False,add_yaw_and_time=True)
             global_pose=global_pose[:-1].__add__((yaw,))
             local_pose=self.global_to_local(origin, global_pose)
