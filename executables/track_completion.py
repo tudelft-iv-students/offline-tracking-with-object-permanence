@@ -20,7 +20,7 @@ from nuscenes.prediction.input_representation.static_layers import correct_yaw
 from nuscenes.eval.common.loaders import load_prediction, add_center_dist, filter_eval_boxes
 from nuscenes.eval.common.config import config_factory
 from nuscenes.eval.tracking.loaders import interpolate_tracking_boxes
-from track_completion_ext import *
+from .track_completion_ext import *
 from models.model import PredictionModel
 from models.encoders.track_completion_encoder import Encoder_occ
 from models.aggregators.attention_occ import Attention_occ
