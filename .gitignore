@@ -166,3 +166,4 @@ mot_results/*
 */token_id_lists.txt
 extracted_track_completion_data/
 extracted_mot_data/
+tmp/

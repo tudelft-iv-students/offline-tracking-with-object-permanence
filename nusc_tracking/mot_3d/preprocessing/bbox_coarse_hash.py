@@ -23,8 +23,8 @@ class BBoxCoarseFilter:
         
     def compute_bbox_key(self, bbox):
         corners = np.asarray(BBox.box2corners2d(bbox))
-        min_keys = np.floor(np.min(corners, axis=0) / self.gsize).astype(np.int)
-        max_keys = np.floor(np.max(corners, axis=0) / self.gsize).astype(np.int)
+        min_keys = np.floor(np.min(corners, axis=0) / self.gsize).astype(int)
+        max_keys = np.floor(np.max(corners, axis=0) / self.gsize).astype(int)
         
         # enumerate all the corners
         grid_keys = [
