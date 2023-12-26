@@ -60,7 +60,8 @@ Table3: Joint evaluation using CenterPoint detection and tracking on the nuScene
 
 
 ## Visualization
-We show visualization results of the final recovered trajectories from occlusions as blue arrows.  
+### Qualitative results of joint evaluation
+We show visualization results of the final recovered trajectories from occlusions as blue arrows. The model takes online tracking results as inputs and performs Re-ID and track completion.
 <p align="middle">
 <img src="assets/vis1.gif" width="350" height="350"/><img src="assets/vis4.gif" width="350" height="350"/>
 </p>
@@ -70,6 +71,11 @@ We show visualization results of the final recovered trajectories from occlusion
 * <span style="color:blue">Blue arrows</span>: recovered box centers which are originally missing in the initial tracking result. 
 
 * <span style="color:red">Red arrows</span>: visible box centers in initial online tracking.
+### Qualitative results of solely track completion 
+We also visualize track completion results. The model takes the unoccluded GT tracks as inputs and inference the occluded trajectories. 
+<p align="middle">
+<img src="assets/ GIF_sample0.gif" width="800" height="400"/><img src="assets/ GIF_sample1.gif" width="800" height="400"/>
+</p>
 
 
 
