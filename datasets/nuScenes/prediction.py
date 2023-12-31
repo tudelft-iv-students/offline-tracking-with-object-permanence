@@ -1,4 +1,4 @@
-# nuScenes dev-kit.
+# Adapted from nuScenes dev-kit.
 # Code written by Freddy Boulton, 2020.
 from typing import Dict, Tuple, Any, List, Callable, Union
 

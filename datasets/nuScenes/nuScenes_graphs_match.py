@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 from datasets.nuScenes.nuScenes_vector import NuScenesVector
-from nuscenes.prediction.input_representation.static_layers import color_by_yaw
-from nuscenes.prediction.input_representation.static_layers import correct_yaw
+
 from pyquaternion import Quaternion
 from nuscenes.eval.prediction.splits import get_prediction_challenge_split
 from nuscenes.eval.common.utils import quaternion_yaw

@@ -1,3 +1,6 @@
+# This dataset is adpated from the vector-based prediction dataset from PGP. 
+# https://github.com/nachiket92/PGP
+
 from datasets.nuScenes.nuScenes import NuScenesTrajectories
 from nuscenes.prediction.input_representation.static_layers import correct_yaw
 from nuscenes.map_expansion.map_api import NuScenesMap

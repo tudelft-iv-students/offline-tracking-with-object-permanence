@@ -1,3 +1,6 @@
+# This is the base prediction dataset class from PGP. 
+# https://github.com/nachiket92/PGP
+
 import abc
 import torch.utils.data as torch_data
 import numpy as np

@@ -1,3 +1,5 @@
+# Code adapted from PGP https://github.com/nachiket92/PGP
+
 # Import datasets
 from nuscenes import NuScenes
 from nuscenes.prediction import PredictHelper

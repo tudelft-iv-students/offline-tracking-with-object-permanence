@@ -1,3 +1,7 @@
+# This is the raster-based prediction dataset from PGP. 
+# https://github.com/nachiket92/PGP
+
+
 from datasets.nuScenes.nuScenes import NuScenesTrajectories
 from nuscenes.prediction.input_representation.static_layers import StaticLayerRasterizer
 from nuscenes.prediction.input_representation.agents import AgentBoxesWithFadedHistory

@@ -1,3 +1,6 @@
+# This is the base nuscenes dataset class from PGP. 
+# https://github.com/nachiket92/PGP
+
 from datasets.interface import SingleAgentDataset
 from nuscenes.eval.prediction.splits import get_prediction_challenge_split
 from datasets.nuScenes.prediction import PredictHelper_occ

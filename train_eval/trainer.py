@@ -1,3 +1,5 @@
+# Code adapted from PGP https://github.com/nachiket92/PGP
+
 import torch.optim
 import torch.utils.data as torch_data
 from typing import Dict

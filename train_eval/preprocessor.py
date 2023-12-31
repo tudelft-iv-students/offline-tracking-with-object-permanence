@@ -1,3 +1,5 @@
+# Code adapted from PGP https://github.com/nachiket92/PGP
+
 from datasets.interface import TrajectoryDataset
 import torch.utils.data as torch_data
 from typing import List, Dict
