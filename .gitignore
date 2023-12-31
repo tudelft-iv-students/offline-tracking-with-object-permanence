@@ -167,3 +167,5 @@ mot_results/*
 extracted_track_completion_data/
 extracted_mot_data/
 tmp
+assets/GIF_sample1.gif
+assets/GIF_sample0.gif
