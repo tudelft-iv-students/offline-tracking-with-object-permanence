@@ -48,14 +48,6 @@ We show the quantitative results on the validation split over the vehicle classe
 
 Table2: Joint evaluation on the nuScenes validation split (occludded boxes are not filtered). $\textbf{w}$: with offline Re-ID and track completion. $\textbf{w/o}$: original results without any refinement.
 
-<!-- |   Track Completion Result on Val Split    | AMOTA (%) $\uparrow$|    TP $\uparrow$ |   FP $\downarrow$ |   FN $\downarrow$ | 
-|:-------------------------------:|:--------:|:-----:|:-----:|:-----:|
-| [CenterPoint](https://github.com/tianweiy/CenterPoint) | 70.2 | 59332 | $\mathbf{8 1 9 7}$ | 14704 |
-| [Immortal Tracker](https://github.com/ImmortalTracker/ImmortalTracker) | 72.3 | 59271 | 9593 | 14883 |
-| Offline Track Completion |   $\mathbf{72.4}$   |  $\mathbf{60675}$ | 8953 | $\mathbf{13432}$ | 
-
-Table3: Joint evaluation using CenterPoint detection and tracking on the nuScenes validation split. -->
-
 </p>
 
 
