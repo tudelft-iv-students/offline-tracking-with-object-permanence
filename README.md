@@ -66,7 +66,7 @@ We show visualization results of the final recovered trajectories from occlusion
 ### Qualitative results of solely track completion 
 We also visualize track completion results. The model takes the unoccluded GT tracks as inputs and inference the occluded trajectories. 
 <p align="middle">
-<img src="assets/ GIF_sample0.gif" width="1000" height="360"/><img src="assets/ GIF_sample1.gif" width="1000" height="360"/>
+<img src="assets/GIF_sample0.gif" width="1000" height="360"/><img src="assets/GIF_sample1.gif" width="1000" height="360"/>
 </p>
 
 
