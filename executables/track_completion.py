@@ -391,7 +391,7 @@ if __name__ == '__main__':
                 
                 for idx,timestamp in enumerate(missing_timestamps):
                     global_coord=local_to_global(origin, tuple(filled_traj[idx]))
-                    global_rotation=get_global_rotation(origin,tuple(filled_yaw[idx]))
+                    global_rotation=get_global_rotation(origin,filled_yaw[idx])
                     box_info={'coord':global_coord,'rotation':global_rotation}
                     filled_dict[scene_token][tracking_id][timestamp]=box_info
             if args.verbose:

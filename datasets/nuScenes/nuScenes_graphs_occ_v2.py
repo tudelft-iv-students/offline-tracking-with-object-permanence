@@ -59,7 +59,7 @@ class NuScenesGraphs_OCC(NuScenesVector):
         super().__init__(mode, data_dir, args, helper)
         self.name=args['split_name']
         self.traversal_horizon = args['traversal_horizon']
-        self.map_radius_buffer=10
+        self.map_radius_buffer=80
         self.match=False
         self.add_static_training_samples = args['add_static_training_samples']
         self.split=args['split']
